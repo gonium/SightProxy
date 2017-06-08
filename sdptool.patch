@@ -1,0 +1,54 @@
+--- sdptool-orig.c	2015-09-04 01:19:36.000000000 +0000
++++ sdptool.c	2017-06-08 18:22:19.584797104 +0000
+@@ -825,6 +825,22 @@
+ 			attrib, value_int, handle);
+ 
+ 		sdp_attr_add_new(rec, attrib, SDP_UINT32, &value_int);
++	} else if (!strncasecmp(value, "0y", 2)) {
++		/* Int - does this 32bit hack only work on little endian?*/
++		uint32_t value_int;
++		value_int = strtoul(value + 2, NULL, 16);
++		printf("Adding uint15 attrib 0x%X int 0x%X to record 0x%X\n",
++			attrib, value_int, handle);
++
++		sdp_attr_add_new(rec, attrib, SDP_UINT16, &value_int);
++	} else if (!strncasecmp(value, "0z", 2)) {
++		/* Int */
++		uint32_t value_int;
++		value_int = strtoul(value + 2, NULL, 16);
++		printf("Deleting attrib 0x%X dummy 0x%X to record 0x%X\n",
++			attrib, value_int, handle);
++
++		sdp_attr_remove(rec, attrib);
+ 	} else {
+ 		/* String */
+ 		printf("Adding attrib 0x%X string \"%s\" to record 0x%X\n",
+@@ -907,6 +923,7 @@
+ 	void **allocArray;
+ 	uint8_t uuid16 = SDP_UUID16;
+ 	uint8_t uint32 = SDP_UINT32;
++	uint8_t uint16 = SDP_UINT16;
+ 	uint8_t str8 = SDP_TEXT_STR8;
+ 	int i, ret = 0;
+ 
+@@ -962,6 +979,20 @@
+ 			printf("Adding int 0x%X to record 0x%X\n", *value_int, handle);
+ 			dtdArray[i] = &uint32;
+ 			valueArray[i] = value_int;
++            } else if (!strncasecmp(argv[i], "0y", 2)) {
++                        /* Int - does this 32bit hack only work on little endian? */
++                        uint32_t *value_int = malloc(sizeof(int));
++                        if (!value_int) {
++                                ret = -ENOMEM;
++                                goto cleanup;
++                        }
++                        allocArray[i] = value_int;
++                        *value_int = strtoul((argv[i]) + 2, NULL, 16);
++
++                        printf("Adding uint16 0x%X to record 0x%X\n", *value_int, handle);
++                        dtdArray[i] = &uint16;
++                        valueArray[i] = value_int;
++
+ 		} else {
+ 			/* String */
+ 			printf("Adding string \"%s\" to record 0x%X\n", argv[i], handle);
