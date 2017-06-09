@@ -10,6 +10,7 @@ echo
 
 echo "Shutting down any previous running"
 pkill -f "sight-proxy.py"
+pkill -f "sight-pairing-agent.py"
 
 handle="0x10000"
 device="hci0"
@@ -38,6 +39,7 @@ done
 
 echo
 echo "Starting proxy"
+python sight-pairing-agent.py &
 python sight-proxy.py &
 sleep 4
 
