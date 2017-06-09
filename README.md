@@ -6,7 +6,7 @@ If everything works then will be able to connect the handset and the data it sen
 
 ### Linux:
 
-I used a Raspberry Pi 2 with Raspian jessie installed and a CSR 4.0 micro dongle.
+I used a Raspberry Pi 2 with Raspian jessie installed and *two* CSR 4.0 micro dongles. These are currently the best selling usb bluetooth dongles on amazon at approx 7 euros each.
 
 I think it should work on Debian jessie but the script relies on some defaults that are seen with the bluetooth subsystem. For example we already have a PNP service on handle 0x10000 that we can then use.
 
@@ -68,9 +68,19 @@ Use pip to install: hexdump, logger, pybluez
 
 #### Starting it up:
 
-Then to start the script
+First you need to know the real mac address of your pump device. To get this, put it in to pairing mode and then try either
 
-    sudo bash sight-proxy.sh
+    hcitool scan
+
+or
+
+    hcitool inq
+
+Until you can determine the mac address.
+
+Then to start the script (replacing xx's with your actual mac address)
+
+    sudo bash sight-proxy.sh xx:xx:xx:xx:xx:xx
 
 The shell script will set up some parameters, prepare the sdp records how they should look and launch the python script to provide the local rfcomm socket
 
@@ -146,7 +156,7 @@ Its possible my patches to sdptool are too simplistic and only work on little en
 
 ### To do:
 
-Currently this is a proof of concept. Next it needs to make an onward connection to the original device rfcomm service and forward the data both ways.
+Currently this is a proof of concept. Next it needs to log the data properly.
 
 
 

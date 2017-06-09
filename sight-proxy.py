@@ -1,5 +1,8 @@
 from bluetooth import *
 import hexdump
+import time
+import select
+import sys
 
 # pnp_sock = BluetoothSocket(RFCOMM)
 # pnp_sock.bind(("", 5))
@@ -13,6 +16,7 @@ port = server_sock.getsockname()[1]
 
 # serial_id_string = b'\x50\x55\x4d\x50\x2d\x4d\x44\x4c\x00\x00' # linux this doesn't work
 serial_id_string = b'\x50\x55\x4d\x50\x2d\x4d\x44\x4c\x00'  # this string works on windows
+search_serial_id_string = b'\x50\x55\x4d\x50\x2d\x4d\x44\x4c' # note no 0x00 terminators
 
 # raspberry pi jessie bluetooth has a PNP service by default
 # advertise_service(pnp_sock, "PNP",
@@ -26,27 +30,128 @@ advertise_service(server_sock, serial_id_string,
                   profiles=[SERIAL_PORT_PROFILE],
                   )
 
+
+real_pump_mac = None
+
+fast_connect = True
+
+if (len(sys.argv) > 1):
+
+    real_pump_mac = sys.argv[1]
+    print "                 Real pump is at:",real_pump_mac
+
+if (len(sys.argv) > 2):
+    second_dongle_mac = sys.argv[2]
+    print "Outbound connections will go via:",second_dongle_mac
+else:
+    second_dongle_mac = None
+
+if (len(sys.argv) > 3):
+   if (sys.argv[3]=="fast"):
+       fast_connect = True
+   else:
+       fast_connect = False
+
+print "          Fast connect is set to:",fast_connect
+
+print
+
+
+
 while True:
-    print("Waiting on channel %d" % port)
+    print "Waiting on channel %d" % port
+
+    mapping = {}
+    input_list = []
+    rsock = None
 
     client_sock, client_info = server_sock.accept()
     print("Accepted connection from ", client_info)
+    input_list.append(client_sock)
+    #client_sock.setblocking(0)
 
-    # TODO add outbound proxy and two-way data relaying
+    if (real_pump_mac != None):
+        print "Searching real device: ",real_pump_mac
 
+        if (not fast_connect):
+            while True:
+                service_matches = find_service(name=search_serial_id_string, address=real_pump_mac)
+
+                if len(service_matches) == 0:
+                    print "Couldn't find the pump service on:",real_pump_mac
+                    time.sleep(1)
+                else:
+                    print "Found real pump service!"
+                    break
+
+
+            first_match = service_matches[0]
+            port = first_match["port"]
+            name = first_match["name"]
+            host = first_match["host"]
+
+        else:
+            print "Using fast connect.."
+            port = 1
+            name = search_serial_id_string
+            host = real_pump_mac
+
+
+        backoff = 0.1
+        while True:
+            try:
+                print("Connecting to real \"%s\" on %s (%s)" % (name, host, port))
+                rsock = BluetoothSocket(RFCOMM)
+                if (second_dongle_mac != None):
+                    rsock.bind((second_dongle_mac,0))
+                rsock.connect((host, port))
+                print "Connected to real"
+                break
+            except BluetoothError,e:
+                print e
+                time.sleep(backoff)
+                backoff=backoff + 0.2
+
+
+        mapping[client_sock]=rsock
+        mapping[rsock]=client_sock
+
+        input_list.append(rsock)
+
+    buffer_size = 1024
+
+    print "Waiting for incoming data"
+
+# TODO Log to file!
     try:
         while True:
-            data = client_sock.recv(1024)
-            if len(data) == 0: break
-            # print("received [%s]" % data)
-            print "-> "
-            print hexdump.hexdump(data)
+
+            selector = select.select
+            inputready, outputready, exceptready = selector(input_list, [], [])
+            for active_socket in inputready:
+
+                data = active_socket.recv(buffer_size)
+
+                if len(data) == 0:
+                    break
+                else:
+                    if (mapping.has_key(active_socket)):
+                        mapping[active_socket].send(data)
+                    if (active_socket is client_sock):
+                        print "-> "
+                    else:
+                        print "<- "
+                    print hexdump.hexdump(data)
+
+
     except IOError:
         pass
 
     print("socket disconnect")
-
+    if (rsock != None):
+        rsock.close()
     client_sock.close()
+
 
 server_sock.close()
 print("exit")
