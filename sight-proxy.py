@@ -3,10 +3,24 @@ import hexdump
 import time
 import select
 import sys
+import logging
 
 # pnp_sock = BluetoothSocket(RFCOMM)
 # pnp_sock.bind(("", 5))
 # pnp_sock.listen(1)
+
+LOG_FILE = "logs/log-sight-proxy-" + str(int(time.time())) + ".log"
+if (not os.path.exists("logs")):
+    os.mkdir("logs")
+
+logging.basicConfig(filename=LOG_FILE, format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
+logger = logging.getLogger('sight-proxy')
+logger.setLevel(logging.INFO)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s : %(message)s')
+console.setFormatter(formatter)
+logger.addHandler(console)
 
 server_sock = BluetoothSocket(RFCOMM)
 server_sock.bind(("", PORT_ANY))
@@ -16,7 +30,7 @@ port = server_sock.getsockname()[1]
 
 # serial_id_string = b'\x50\x55\x4d\x50\x2d\x4d\x44\x4c\x00\x00' # linux this doesn't work
 serial_id_string = b'\x50\x55\x4d\x50\x2d\x4d\x44\x4c\x00'  # this string works on windows
-search_serial_id_string = b'\x50\x55\x4d\x50\x2d\x4d\x44\x4c' # note no 0x00 terminators
+search_serial_id_string = b'\x50\x55\x4d\x50\x2d\x4d\x44\x4c'  # note no 0x00 terminators
 
 # raspberry pi jessie bluetooth has a PNP service by default
 # advertise_service(pnp_sock, "PNP",
@@ -30,33 +44,29 @@ advertise_service(server_sock, serial_id_string,
                   profiles=[SERIAL_PORT_PROFILE],
                   )
 
-
 real_pump_mac = None
 
 fast_connect = True
 
 if (len(sys.argv) > 1):
-
     real_pump_mac = sys.argv[1]
-    print "                 Real pump is at:",real_pump_mac
+    print "                 Real pump is at:", real_pump_mac
 
 if (len(sys.argv) > 2):
     second_dongle_mac = sys.argv[2]
-    print "Outbound connections will go via:",second_dongle_mac
+    print "Outbound connections will go via:", second_dongle_mac
 else:
     second_dongle_mac = None
 
 if (len(sys.argv) > 3):
-   if (sys.argv[3]=="fast"):
-       fast_connect = True
-   else:
-       fast_connect = False
+    if (sys.argv[3] == "fast"):
+        fast_connect = True
+    else:
+        fast_connect = False
 
-print "          Fast connect is set to:",fast_connect
+print "          Fast connect is set to:", fast_connect
 
 print
-
-
 
 while True:
     print "Waiting on channel %d" % port
@@ -66,24 +76,23 @@ while True:
     rsock = None
 
     client_sock, client_info = server_sock.accept()
-    print("Accepted connection from ", client_info)
+    logger.info("Accepted connection from " + str(client_info))
     input_list.append(client_sock)
-    #client_sock.setblocking(0)
+    # client_sock.setblocking(0)
 
     if (real_pump_mac != None):
-        print "Searching real device: ",real_pump_mac
+        logger.info("Searching real device: " + real_pump_mac)
 
         if (not fast_connect):
             while True:
                 service_matches = find_service(name=search_serial_id_string, address=real_pump_mac)
 
                 if len(service_matches) == 0:
-                    print "Couldn't find the pump service on:",real_pump_mac
+                    logger.error("Couldn't find the pump service on: " + real_pump_mac)
                     time.sleep(1)
                 else:
-                    print "Found real pump service!"
+                    logger.info("Found real pump service!")
                     break
-
 
             first_match = service_matches[0]
             port = first_match["port"]
@@ -96,25 +105,23 @@ while True:
             name = search_serial_id_string
             host = real_pump_mac
 
-
         backoff = 0.1
         while True:
             try:
-                print("Connecting to real \"%s\" on %s (%s)" % (name, host, port))
+                logger.info("Connecting to real \"%s\" on %s (%s)" % (name, host, port))
                 rsock = BluetoothSocket(RFCOMM)
                 if (second_dongle_mac != None):
-                    rsock.bind((second_dongle_mac,0))
+                    rsock.bind((second_dongle_mac, 0))
                 rsock.connect((host, port))
-                print "Connected to real"
+                logger.info("Connected to real")
                 break
-            except BluetoothError,e:
-                print e
+            except BluetoothError, e:
+                logger.error("Connect error: " + str(e))
                 time.sleep(backoff)
-                backoff=backoff + 0.2
+                backoff = backoff + 0.2
 
-
-        mapping[client_sock]=rsock
-        mapping[rsock]=client_sock
+        mapping[client_sock] = rsock
+        mapping[rsock] = client_sock
 
         input_list.append(rsock)
 
@@ -122,7 +129,7 @@ while True:
 
     print "Waiting for incoming data"
 
-# TODO Log to file!
+    # TODO Log to file!
     try:
         while True:
 
@@ -138,20 +145,22 @@ while True:
                     if (mapping.has_key(active_socket)):
                         mapping[active_socket].send(data)
                     if (active_socket is client_sock):
-                        print "-> "
+                        prefix = "------>>> "
                     else:
-                        print "<- "
-                    print hexdump.hexdump(data)
+                        prefix = "<<<------ "
+                    if (data != None):
+                        hdr = hexdump.hexdump(data, result="return")
+                        if (hdr != None and hdr != "None"):
+                            logger.info("\n" + prefix + "\n" + hdr + "\n")
 
 
     except IOError:
         pass
 
-    print("socket disconnect")
+    logger.info("socket disconnect")
     if (rsock != None):
         rsock.close()
     client_sock.close()
 
-
 server_sock.close()
-print("exit")
+logger.info("exit")

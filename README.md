@@ -6,7 +6,7 @@ If everything works then will be able to connect the handset and the data it sen
 
 ### Linux:
 
-I used a Raspberry Pi 2 with Raspian jessie installed and *two* CSR 4.0 micro dongles. These are currently the best selling usb bluetooth dongles on amazon at approx 7 euros each.
+I used a Raspberry Pi 2 with Raspian jessie installed and *two* CSR 4.0 micro dongles. These are currently the best selling usb bluetooth dongles on amazon at approx 7 euros each. They identify as using the CSR8510 A10 chipset.
 
 I think it should work on Debian jessie but the script relies on some defaults that are seen with the bluetooth subsystem. For example we already have a PNP service on handle 0x10000 that we can then use.
 
@@ -53,6 +53,10 @@ Once compiled install it somewhere
 Check it works and your bluetooth is up and running
 
     joh-sdptool browse local
+
+If you are using two bluetooth dongles and you somehow manage to get sold two with the same mac address (which happened to me) then you can change the mac address of one of them using eg:
+
+    tools/bdaddr -i hciX 00:11:22:33:44:55
 
 #### Python install:
 
@@ -147,16 +151,20 @@ Sequence
 
 Now you can take your handset, remove the current pairing and add a new device and select the Linux device and at that point you will start to see data appear in hexdump output! Good luck!
 
+Logs will be stored in a created folder `logs` in the current directory.
+
 ### Limitations:
 
 The scripts are very simple prototypes without any error checking, it either works straight off or some missing component will completely prevent it from working.
 
 Its possible my patches to sdptool are too simplistic and only work on little endian, so will work on raspberry pi but not on a PC - this needs checking
 
+I have only tested this in a multi-dongle configuration, it may work with just a single dongle but I thought two was more likely to succeed.
+
 
 ### To do:
 
-Currently this is a proof of concept. Next it needs to log the data properly.
+Currently this is a proof of concept. Testing is needed to verify it works on different platforms other than the raspberry pi.
 
 
 

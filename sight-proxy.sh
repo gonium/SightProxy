@@ -101,6 +101,7 @@ joh-sdptool -i $indongle setseq "$rfcomm" 0x0006 0y656e 0y006a 0y0100
 
 # make discoverable
 echo "Making discoverable"
+sudo hciconfig "$indongle" up
 sudo hciconfig "$indongle" class 0x000900
 sudo hciconfig "$indongle" name "PUMP32014627"
 sudo hciconfig "$indongle" piscan
@@ -108,7 +109,8 @@ sudo hciconfig "$indongle" piscan
 if [ "$outdongle" != "$indongle" ]
 then
 echo "Also configuring outbound dongle"
-sudo hciconfig "outdongle" class 0x000910
+sudo hciconfig "$outdongle" up
+sudo hciconfig "$outdongle" class 0x000910
 sudo hciconfig "$outdongle" name "METER32014627"
 sudo hciconfig "$outdongle" piscan
 fi
