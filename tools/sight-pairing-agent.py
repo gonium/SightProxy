@@ -5,10 +5,10 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 from optparse import OptionParser
-import sys
+
 import dbus
-import dbus.service
 import dbus.mainloop.glib
+import dbus.service
 try:
   from gi.repository import GObject
 except ImportError:
@@ -173,7 +173,7 @@ if __name__ == '__main__':
 
 	if len(args) > 0:
 		device = bluezutils.find_device(args[0],
-						options.adapter_pattern)
+										options.adapter_pattern)
 		dev_path = device.object_path
 		agent.set_exit_on_release(False)
 		device.Pair(reply_handler=pair_reply, error_handler=pair_error,

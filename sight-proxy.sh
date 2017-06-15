@@ -89,7 +89,7 @@ done
 echo
 echo "Starting proxy"
 # actually the pairing agent seems to break things
-#python sight-pairing-agent.py &
+#python tools/sight-pairing-agent.py &
 python sight-proxy.py "$real_pump_mac" "$outmac" $2 &
 sleep 4
 

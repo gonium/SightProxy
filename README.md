@@ -28,7 +28,7 @@ Insert a bluetooth dongle which is fairly recent. A CSR chipset BT 4.x dongle sh
 
 You need a patched version of sdptool to set uint16 attributes. I call this `joh-sdptool`
 
-    sudo apt-get install -y glib2.0-dev libdbus-1-dev libical-dev libreadline-dev
+    sudo apt-get install -y build-essential glib2.0-dev libdbus-1-dev libical-dev libreadline-dev
     mkdir work
     cd work
     wget http://www.kernel.org/pub/linux/bluetooth/bluez-5.45.tar.xz
