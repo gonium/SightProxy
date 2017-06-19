@@ -1,13 +1,16 @@
-from bluetooth import *
-import hexdump
-import time
-import select
-import sys
 import logging
+import select
+import time
+
+from bluetooth import *
+
+from lib.pump_emulator import *
 
 # pnp_sock = BluetoothSocket(RFCOMM)
 # pnp_sock.bind(("", 5))
 # pnp_sock.listen(1)
+
+EMULATE_PUMP = False
 
 LOG_FILE = "logs/log-sight-proxy-" + str(int(time.time())) + ".log"
 if (not os.path.exists("logs")):
@@ -50,7 +53,11 @@ fast_connect = True
 
 if (len(sys.argv) > 1):
     real_pump_mac = sys.argv[1]
-    print "                 Real pump is at:", real_pump_mac
+    if (real_pump_mac == 'emulate'):
+        print "                 Using pump emulator!"
+        EMULATE_PUMP = True
+    else:
+        print "                 Real pump is at:", real_pump_mac
 
 if (len(sys.argv) > 2):
     second_dongle_mac = sys.argv[2]
@@ -80,7 +87,7 @@ while True:
     input_list.append(client_sock)
     # client_sock.setblocking(0)
 
-    if (real_pump_mac != None):
+    if (not EMULATE_PUMP and real_pump_mac != None):
         logger.info("Searching real device: " + real_pump_mac)
 
         if (not fast_connect):
@@ -129,7 +136,6 @@ while True:
 
     print "Waiting for incoming data"
 
-    # TODO Log to file!
     try:
         while True:
 
@@ -138,12 +144,14 @@ while True:
             for active_socket in inputready:
 
                 data = active_socket.recv(buffer_size)
-
+                # TODO needs chunking pipeline
                 if len(data) == 0:
                     break
                 else:
-                    if (mapping.has_key(active_socket)):
-                        mapping[active_socket].send(data)
+                    if not EMULATE_PUMP:
+                        if (mapping.has_key(active_socket)):
+                            mapping[active_socket].send(data)
+
                     if (active_socket is client_sock):
                         prefix = "------>>> "
                     else:
@@ -152,6 +160,15 @@ while True:
                         hdr = hexdump.hexdump(data, result="return")
                         if (hdr != None and hdr != "None"):
                             logger.info("\n" + prefix + "\n" + hdr + "\n")
+
+                    if EMULATE_PUMP:
+                        pump_response = generate_pump_response(data)
+                        if not pump_response == None:
+                            active_socket.send(pump_response)
+                            prefix = "<<<-----E "
+                            hdr = hexdump.hexdump(pump_response, result="return")
+                            if (hdr != None and hdr != "None"):
+                                logger.info("\n" + prefix + "\n" + hdr + "\n")
 
 
     except IOError:
