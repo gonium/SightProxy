@@ -11,6 +11,7 @@ from lib.pump_emulator import *
 # pnp_sock.listen(1)
 
 EMULATE_PUMP = False
+PARSE_WHEN_PROXY = True
 
 LOG_FILE = "logs/log-sight-proxy-" + str(int(time.time())) + ".log"
 if (not os.path.exists("logs")):
@@ -144,7 +145,7 @@ while True:
             for active_socket in inputready:
 
                 data = active_socket.recv(buffer_size)
-                # TODO needs chunking pipeline
+
                 if len(data) == 0:
                     break
                 else:
@@ -164,6 +165,11 @@ while True:
                         if not EMULATE_PUMP:
                             if (mapping.has_key(active_socket)):
                                 mapping[active_socket].send(data)
+                                if PARSE_WHEN_PROXY:
+                                    if (active_socket is client_sock):
+                                        pretty_parsed(parse_packet(data, INCOMING_KEY))
+                                    else:
+                                        pretty_parsed(parse_packet(data, OUTGOING_KEY))
 
                         if (active_socket is client_sock):
                             prefix = "------>>> "

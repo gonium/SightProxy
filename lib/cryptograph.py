@@ -140,6 +140,7 @@ def produceCTRblock(nonce, counter):
 
 
 def CTRmodeEncryptData(plain, nonce, key):
+    if (key is None): return None
     padded = blockCipherZeroPad(plain)
     stream = ''
     for i in range(len(padded) >> 4):

@@ -79,6 +79,14 @@ def getCommandValueFromName(name):
     return COMMAND_TYPE.keys()[COMMAND_TYPE.values().index(name)]
 
 
+def pretty_parsed(x):
+    if x is None: return
+    if (x['status'] == "identified"):
+        pretty(x['records'])
+    else:
+        print x['reason']
+    print
+
 def pretty(d, indent=0, ascii=False):
     for key, value in d.iteritems():
         if (ascii):
