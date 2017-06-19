@@ -15,6 +15,8 @@ EMPTY_NONCE = '\x00' * 13
 EMPTY_CRC = 0
 EMPTY_LENGTH = 0
 
+INBOUND_PIPELINE = ''
+
 PRIMITIVES = {
     'Magic': '4s',
     'PacketLength': 'L',
@@ -36,11 +38,13 @@ PRIMITIVES = {
     'Trailer': '8s',
     'Data': '0s'
 }
-HEADER = ['Magic', 'PacketLengthA', 'PacketLengthB', 'Version', 'Command', 'Length', 'ComID', 'Nonce']
+TOP_HEADER = ['Magic', 'PacketLengthA']
+HEADER = TOP_HEADER + ['PacketLengthB', 'Version', 'Command', 'Length', 'ComID', 'Nonce']
 FOOTER = ['Trailer']
 
 DEFINITION = {
     'Header': HEADER,
+    'TopHeader': TOP_HEADER,
     'Error': HEADER + ['ErrorCode'] + FOOTER,
     'ConnectionRequest': HEADER + ['CRC', ] + FOOTER,
     'ConnectionResponse': HEADER + ['UnknownByte', 'CRC', ] + FOOTER,
@@ -156,6 +160,31 @@ def unpackedToDictionary(unpacked_data, definition):
             result['TimeStampConverted'] = convertToTime(int(a))
 
     return result
+
+
+def getPipelinedPacket(data):
+    global INBOUND_PIPELINE
+    data = INBOUND_PIPELINE + data
+    s = getStructFromDefinition('TopHeader')
+    if data == None or len(data) < s.size:
+        #print "Not enough data for pipeline processing"
+        return None
+
+    INBOUND_PIPELINE = ''
+    (magic, packet_size) = s.unpack(data[0:s.size])
+    packet_size += 8
+
+    if (len(data) < packet_size):
+        # too small
+        print "Storing " + str(len(data)) + " bytes in the pipeline"
+        INBOUND_PIPELINE += data
+        return None
+    elif (len(data) > packet_size):
+        print "Storing " + str(len(data) - packet_size) + " remaindered data bytes in the pipeline"
+        INBOUND_PIPELINE += data[packet_size:]
+        return data[:packet_size]
+    else:
+        return data
 
 
 def parse_packet(data, key=None):
@@ -325,3 +354,16 @@ def build_KeyResponse(comid=0, random_data=None, secret_key=None, peer_public_ke
 
 if __name__ == "__main__":
     print "Running packet factory test parameters"
+
+
+    def hdwrap(data):
+        if (data != None):
+            hexdump.hexdump(data)
+
+
+    from test_packets import *
+
+    hdwrap(getPipelinedPacket(TESTDPACKET09))
+    hdwrap(getPipelinedPacket(''))
+    hdwrap(getPipelinedPacket(TESTIPACKET0Ca))
+    hdwrap(getPipelinedPacket(TESTIPACKET0Cb))

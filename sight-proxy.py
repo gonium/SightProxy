@@ -148,27 +148,35 @@ while True:
                 if len(data) == 0:
                     break
                 else:
-                    if not EMULATE_PUMP:
-                        if (mapping.has_key(active_socket)):
-                            mapping[active_socket].send(data)
 
-                    if (active_socket is client_sock):
-                        prefix = "------>>> "
-                    else:
-                        prefix = "<<<------ "
-                    if (data != None):
-                        hdr = hexdump.hexdump(data, result="return")
-                        if (hdr != None and hdr != "None"):
-                            logger.info("\n" + prefix + "\n" + hdr + "\n")
+                    packet_pipeline = [getPipelinedPacket(data)]
+                    pdata = [ getPipelinedPacket('') ]
+                    while not pdata is None:
+                        packet_pipeline += pdata
+                        pdata = getPipelinedPacket('')
 
-                    if EMULATE_PUMP:
-                        pump_response = generate_pump_response(data)
-                        if not pump_response == None:
-                            active_socket.send(pump_response)
-                            prefix = "<<<-----E "
-                            hdr = hexdump.hexdump(pump_response, result="return")
+                    for data in packet_pipeline:
+                        if not EMULATE_PUMP:
+                            if (mapping.has_key(active_socket)):
+                                mapping[active_socket].send(data)
+
+                        if (active_socket is client_sock):
+                            prefix = "------>>> "
+                        else:
+                            prefix = "<<<------ "
+                        if (data != None):
+                            hdr = hexdump.hexdump(data, result="return")
                             if (hdr != None and hdr != "None"):
                                 logger.info("\n" + prefix + "\n" + hdr + "\n")
+
+                        if EMULATE_PUMP:
+                            pump_response = generate_pump_response(data)
+                            if not pump_response == None:
+                                active_socket.send(pump_response)
+                                prefix = "<<<-----E "
+                                hdr = hexdump.hexdump(pump_response, result="return")
+                                if (hdr != None and hdr != "None"):
+                                    logger.info("\n" + prefix + "\n" + hdr + "\n")
 
 
     except IOError:
