@@ -177,7 +177,7 @@ while True:
                         if EMULATE_PUMP:
                             pump_response = generate_pump_response(data)
                             if not pump_response == None:
-                                outputs = list(splitByMTU(pump_response, 220))
+                                outputs = list(splitByMTU(pump_response, 110))
                                 for item in outputs:
                                     active_socket.send(item)
                                     prefix = "<<<-----E "
