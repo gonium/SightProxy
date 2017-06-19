@@ -149,10 +149,15 @@ while True:
                     break
                 else:
 
-                    packet_pipeline = [getPipelinedPacket(data)]
-                    pdata = [ getPipelinedPacket('') ]
+                    packet_pipeline = []
+
+                    pdata = getPipelinedPacket(data)
+                    if (not pdata is None):
+                        packet_pipeline += [ pdata ]
+
+                    pdata = getPipelinedPacket('')
                     while not pdata is None:
-                        packet_pipeline += pdata
+                        packet_pipeline += [ pdata ]
                         pdata = getPipelinedPacket('')
 
                     for data in packet_pipeline:
