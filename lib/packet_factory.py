@@ -162,6 +162,11 @@ def unpackedToDictionary(unpacked_data, definition):
     return result
 
 
+def splitByMTU(data, mtu):
+    while data:
+        yield data[:mtu]
+        data = data[mtu:]
+
 def getPipelinedPacket(data):
     global INBOUND_PIPELINE
     data = INBOUND_PIPELINE + data

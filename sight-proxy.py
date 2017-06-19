@@ -153,11 +153,11 @@ while True:
 
                     pdata = getPipelinedPacket(data)
                     if (not pdata is None):
-                        packet_pipeline += [ pdata ]
+                        packet_pipeline += [pdata]
 
                     pdata = getPipelinedPacket('')
                     while not pdata is None:
-                        packet_pipeline += [ pdata ]
+                        packet_pipeline += [pdata]
                         pdata = getPipelinedPacket('')
 
                     for data in packet_pipeline:
@@ -177,11 +177,13 @@ while True:
                         if EMULATE_PUMP:
                             pump_response = generate_pump_response(data)
                             if not pump_response == None:
-                                active_socket.send(pump_response)
-                                prefix = "<<<-----E "
-                                hdr = hexdump.hexdump(pump_response, result="return")
-                                if (hdr != None and hdr != "None"):
-                                    logger.info("\n" + prefix + "\n" + hdr + "\n")
+                                outputs = list(splitByMTU(pump_response, 220))
+                                for item in outputs:
+                                    active_socket.send(item)
+                                    prefix = "<<<-----E "
+                                    hdr = hexdump.hexdump(item, result="return")
+                                    if (hdr != None and hdr != "None"):
+                                        logger.info("\n" + prefix + "\n" + hdr + "\n")
 
 
     except IOError:
