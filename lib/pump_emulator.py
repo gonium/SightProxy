@@ -41,7 +41,7 @@ def generate_pump_response(data):
             print "Replying with KeyResponse"
             PEER_PUBLIC_KEY = r['records']['PreMasterKey']
             PEER_RANDOM_DATA = r['records']['RandomData']
-            (SECRET_KEY, PUMP_RANDOM_DATA) = createKeyData()
+            (PUMP_RANDOM_DATA, SECRET_KEY) = createKeyData()
             reply = build_KeyResponse(comid=r['records']['ComID'],
                                       random_data=PUMP_RANDOM_DATA, secret_key=SECRET_KEY,
                                       peer_public_key=PEER_PUBLIC_KEY,
