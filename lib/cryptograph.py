@@ -6,6 +6,7 @@ import hexdump
 
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
+from Crypto.Util.number import getRandomRange, bytes_to_long, long_to_bytes
 
 from twofish import CBCMode
 from twofish import Twofish
@@ -23,7 +24,7 @@ def getRandomBytes(bytes):
 
 
 def createKeyData():
-    (prandom, masterkey) = (getRandomBytes(28), getRandomBytes(28))
+    (prandom, masterkey) = (getRandomBytes(28), getRandomBytes(32))
     KEY_STORE['prandom'] = prandom
     KEY_STORE['masterkey'] = masterkey  # not needed?
     return (prandom, masterkey)
@@ -91,7 +92,7 @@ def getRSAkey():
     if os.path.exists(KEY_STORE_PEM):
         with open(KEY_STORE_PEM, mode='rb') as pemfile:
             key = RSA.importKey(pemfile.read())
-            print "Loaded pre-generated RSA key"
+            # print "Loaded pre-generated RSA key"
     else:
         print "Generating RSA key - please wait this may take some minutes!"
         key = RSA.generate(2048, randfunc=os.urandom)
@@ -105,6 +106,10 @@ def getRSAkey():
 def publicKeyFromString(string):
     key = RSA.construct((long(hd(string), 16), long(65537)))
     return key
+
+
+def publicKeyToString(key):
+    return long_to_bytes(key.publickey().key.n)
 
 
 def encryptWithPeerRSAkey(data, pubkey):
@@ -172,10 +177,8 @@ assert (hd(produceCCMtag(key="\x9e\x89\xef\x30\xb5\x6a\x5d\x6a\x99\x17\x2b\x31\x
                          payload='\x67\xef\x3a\xfc\x48\x4e\x69\x0a\x30\x3c\x45\xd1\xec\xe5\x49\x53' * 5,
                          header='\xbb\xe1\xe7\xf1\x40\x7e\x23\x5c\xe6\x8b\x9a\xd7\x4a\x14\x29\xfe' * 5)) == "8062ec3ab19db5cb")
 
+assert (PKCS1_OAEP.new(getRSAkey()).decrypt(
+    encryptWithPeerRSAkey("hello world", publicKeyFromString(publicKeyToString(getRSAkey())))) == "hello world")
+
 if __name__ == "__main__":
     print "Running cypto test parameters"
-    print getRSAkey().exportKey('PEM')
-    print "Tag Result: " + hd(produceCCMtag(key="\x9e\x89\xef\x30\xb5\x6a\x5d\x6a\x99\x17\x2b\x31\x8c\xb2\x6c\x6c",
-                                            nonce="\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xab",
-                                            payload='\x67\xef\x3a\xfc\x48\x4e\x69\x0a\x30\x3c\x45\xd1\xec\xe5\x49\x53' * 5,
-                                            header='\xbb\xe1\xe7\xf1\x40\x7e\x23\x5c\xe6\x8b\x9a\xd7\x4a\x14\x29\xfe' * 5))
