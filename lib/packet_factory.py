@@ -1,5 +1,7 @@
 import collections
 
+import datetime
+
 from crc_algorithms import Crc
 from cryptograph import *
 
@@ -85,7 +87,10 @@ def pretty_parsed(x):
         pretty(x['records'])
     else:
         print x['reason']
+    if ('valid' in x):
+        print "         valid:  " + str(x['valid'])
     print
+
 
 def pretty(d, indent=0, ascii=False):
     for key, value in d.iteritems():
@@ -129,10 +134,38 @@ def injectTagForPacket(packet, key, payload=''):
         print "Key not set when injecting tag!"
         return None
 
+    # header = packet[8:29]
+    # nonce = packet[16:19]
+    # tag = produceCCMtag(nonce=nonce, payload=payload, header=header, key=key)
+    tag = produceTagForPacket(packet, key, payload)
+    return packet[:len(packet) - 8] + tag
+
+
+def produceTagForPacket(packet, key, payload=''):
+    if (key == None):
+        print "Key not set when generating tag!"
+        return None
+
     header = packet[8:29]
     nonce = packet[16:19]
     tag = produceCCMtag(nonce=nonce, payload=payload, header=header, key=key)
-    return packet[:len(packet) - 8] + tag
+    return tag
+
+
+def checkTagForPacket(packet, key, payload='', tag=None):
+    if (key == None):
+        print "Key not set when checking tag!"
+        return None
+
+    if (tag == None):
+        tag = packet[len(packet) - 8:]
+
+    result = produceTagForPacket(packet, key, payload=payload)
+    if (result == tag):
+        return True
+    else:
+        print "CCM TAG does not match for packet!"
+        return False
 
 
 def convertToTime(val):
@@ -144,6 +177,17 @@ def convertToTime(val):
     result['minute'] = val >> 6 & 0x3f
     result['second'] = val & 0x3f
     return result
+
+
+def getCurrentTimeStamp():
+    now = datetime.datetime.now()
+    val = (now.year % 100 & 0x3f) << 26 | (
+                                              now.month & 0x0f) << 22 | (
+                                                                            now.day & 0x1f) << 17 | (
+                                                                                                        now.hour & 0x1f) << 12 | (
+                                                                                                                                     now.minute & 0x3f) << 6 | (
+              now.second & 0x3f)
+    return val
 
 
 def produceComID(comid):
@@ -175,12 +219,13 @@ def splitByMTU(data, mtu):
         yield data[:mtu]
         data = data[mtu:]
 
+
 def getPipelinedPacket(data):
     global INBOUND_PIPELINE
     data = INBOUND_PIPELINE + data
     s = getStructFromDefinition('TopHeader')
     if data == None or len(data) < s.size:
-        #print "Not enough data for pipeline processing"
+        # print "Not enough data for pipeline processing"
         return None
 
     INBOUND_PIPELINE = ''
@@ -200,7 +245,8 @@ def getPipelinedPacket(data):
         return data
 
 
-def parse_packet(data, key=None):
+def parse_packet(data, key=None, logger=None):
+    has_decrypted = False
     result = {'status': 'fail'}
 
     ########## PARSE HEADER
@@ -223,8 +269,6 @@ def parse_packet(data, key=None):
         result['reason'] = 'magic number doesnt match'
         return result
 
-    # Todo check length - continuation for multi part
-
     if (header_data['Version'] != PROTOCOL_VERSION):
         result['reason'] = 'protocol version unknown'
         return result
@@ -234,8 +278,8 @@ def parse_packet(data, key=None):
         return result
 
     command_name = COMMAND_TYPE[header_data['Command']]
-    print
-    print "PACKET COMMAND: ", command_name
+    # print
+    # print "PACKET COMMAND: ", command_name
     result['command'] = command_name
     result['status'] = 'identified'
 
@@ -254,9 +298,25 @@ def parse_packet(data, key=None):
 
     command_data = unpackedToDictionary(s.unpack(data[0:s.size]), command_name)
 
-    if ('Data' in command_data):
+    if ('Data' in command_data and key):
         # TODO verify message authentication code
         command_data['Decrypted'] = CTRmodeEncryptData(plain=command_data['Data'], nonce=command_data['Nonce'], key=key)
+        if command_data['Decrypted']:
+            has_decrypted = True
+
+    if ('PairingStatus' in command_data and key):
+        # TODO verify message authentication code
+        command_data['Decrypted'] = CTRmodeEncryptData(plain=command_data['PairingStatus'], nonce=command_data['Nonce'],
+                                                       key=key)
+        if command_data['Decrypted']:
+            has_decrypted = True
+
+    if ('Trailer' in command_data and command_data['Trailer'] != EMPTY_TRAILER and result[
+        'command'] != "ConnectionRequest"):
+        pl = ''
+        if 'Decrypted' in command_data:
+            pl = command_data['Decrypted']
+        result['valid'] = checkTagForPacket(data, key, payload=pl, tag=None)
 
     if ('CRC' in command_data):
         calc_crc = calculateCrc(data)
@@ -266,11 +326,39 @@ def parse_packet(data, key=None):
             return result
 
     result['records'] = command_data
-
+    if (logger != None and has_decrypted):
+        processAnyDecryptedData(logger=logger, result=result)
     return result
 
 
+def processAnyDecryptedData(logger=None, result=None):
+    if (result != None):
+        if 'records' in result:
+            r = result['records']
+            if 'Decrypted' in r:
+                logger.info(
+                    "++++ " + result['command'] + " =\n" + hexdump.hexdump(r['Decrypted'], result="return") + "\n")
+
+
 ### Packet builders
+
+def build_ConnectionRequest(comid=0):
+    packet_type = 'ConnectionRequest'
+    s = getStructFromDefinition(packet_type)
+
+    connection_request_length = 0
+    (pla, plb) = calculatePacketLengths(s.size)
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
+                    connection_request_length + 2,
+                    produceComID(comid), EMPTY_NONCE, EMPTY_CRC, EMPTY_TRAILER)
+
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
+                    connection_request_length + 2,
+                    produceComID(comid), EMPTY_NONCE, calculateCrc(packet), EMPTY_TRAILER)
+
+    # Assuming trailer contents doesn't matter here
+    return packet
+
 
 def build_ConnectionResponse(comid=0):
     packet_type = 'ConnectionResponse'
@@ -304,6 +392,21 @@ def build_SynAckResponse(comid=0, nonce=None):
     return packet
 
 
+def build_VerifyDisplayRequest(comid=0, nonce=None, key=None):
+    packet_type = 'VerifyDisplayRequest'
+    nonce = incrementNonce(nonce)
+    s = getStructFromDefinition(packet_type)
+
+    response_length = 0
+    (pla, plb) = calculatePacketLengths(s.size)
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
+                    response_length, comid, nonce,
+                    EMPTY_TRAILER)
+
+    packet = injectTagForPacket(packet, key=key, payload='')
+    return packet
+
+
 def build_VerifyDisplayResponse(comid=0, nonce=None, key=None):
     packet_type = 'VerifyDisplayResponse'
     s = getStructFromDefinition(packet_type)
@@ -315,6 +418,23 @@ def build_VerifyDisplayResponse(comid=0, nonce=None, key=None):
                     comid, nonce, EMPTY_TRAILER)
 
     packet = injectTagForPacket(packet, key=key)
+    return packet
+
+
+def build_VerifyConfirmRequest(comid=0, nonce=None, key=None):
+    packet_type = 'VerifyConfirmRequest'
+    nonce = incrementNonce(nonce)
+    pairing_confirmed = '\x3b\x2e'
+    pairing_confirmed_crypted = CTRmodeEncryptData(plain=pairing_confirmed, nonce=nonce, key=key)
+    s = getStructFromDefinition(packet_type)
+
+    response_length = 2
+    (pla, plb) = calculatePacketLengths(s.size)
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
+                    response_length, comid, nonce,
+                    pairing_confirmed_crypted, EMPTY_TRAILER)
+
+    packet = injectTagForPacket(packet, key=key, payload=pairing_confirmed)
     return packet
 
 
@@ -332,6 +452,27 @@ def build_VerifyConfirmResponse(comid=0, nonce=None, key=None):
                     pairing_confirmed_crypted, EMPTY_TRAILER)
 
     packet = injectTagForPacket(packet, key=key, payload=pairing_confirmed)
+    return packet
+
+
+def build_KeyRequest(comid=1, random_data=None, our_public_key=None, lazy_timestamp=None,
+                     nonce=None):
+    packet_type = 'KeyRequest'
+    s = getStructFromDefinition(packet_type)
+    connection_response_length = 290
+    (pla, plb) = calculatePacketLengths(s.size)
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION,
+                    getCommandValueFromName(packet_type), connection_response_length,
+                    comid, EMPTY_NONCE,
+                    random_data, lazy_timestamp, our_public_key,
+                    EMPTY_CRC, EMPTY_TRAILER)
+
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
+                    connection_response_length,
+                    comid, EMPTY_NONCE,
+                    random_data, lazy_timestamp, our_public_key,
+                    calculateCrc(packet), EMPTY_TRAILER)
+
     return packet
 
 
@@ -375,8 +516,3 @@ if __name__ == "__main__":
 
 
     from test_packets import *
-
-    hdwrap(getPipelinedPacket(TESTDPACKET09))
-    hdwrap(getPipelinedPacket(''))
-    hdwrap(getPipelinedPacket(TESTIPACKET0Ca))
-    hdwrap(getPipelinedPacket(TESTIPACKET0Cb))
