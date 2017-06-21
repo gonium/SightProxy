@@ -14,7 +14,7 @@ from twofish import Twofish
 KEY_STORE_PEM = "myRSAkey.pem"
 KEY_SEED = "\x6D\x61\x73\x74\x65\x72\x20\x73\x65\x63\x72\x65\x74"
 
-KEY_STORE = {}
+KEY_STORE = {} # not used
 
 
 ### random data
@@ -121,6 +121,8 @@ def decryptWithOurRSAkey(data):
 
 
 def hd(s):
+    if s is None:
+        return "None"
     return hexdump.dump(s).lower().replace(" ", "")
 
 
@@ -171,6 +173,8 @@ def produceCCMtag(nonce, payload, header, key=None):
     ctr = Twofish(key).encrypt(produceCTRblock(nonce, 0))
     final = stringXOR(result, ctr)
     return final
+
+
 
 
 ### self tests

@@ -17,7 +17,6 @@ EMPTY_NONCE = '\x00' * 13
 EMPTY_CRC = 0
 EMPTY_LENGTH = 0
 
-INBOUND_PIPELINE = ''
 
 PRIMITIVES = {
     'Magic': '4s',
@@ -168,6 +167,13 @@ def checkTagForPacket(packet, key, payload='', tag=None):
         return False
 
 
+def reEncryptBlock(nonce=None, payload=None, key=None, packet=None):
+    crypted_data = CTRmodeEncryptData(plain=payload, nonce=nonce, key=key)
+    packet = packet[:-(8 + len(payload))] + crypted_data + '\x00' * 8
+    packet = injectTagForPacket(packet, key=key, payload=payload)
+    return packet
+
+
 def convertToTime(val):
     result = collections.OrderedDict()
     result['year'] = val >> 26 & 0x3f  # up till 2063
@@ -220,32 +226,33 @@ def splitByMTU(data, mtu):
         data = data[mtu:]
 
 
-def getPipelinedPacket(data):
-    global INBOUND_PIPELINE
-    data = INBOUND_PIPELINE + data
+def getPipelinedPacket(data, pipeline=None):
+    assert(not pipeline is None)
+    data = pipeline + data
     s = getStructFromDefinition('TopHeader')
     if data == None or len(data) < s.size:
         # print "Not enough data for pipeline processing"
         return None
 
-    INBOUND_PIPELINE = ''
+    pipeline = ''
     (magic, packet_size) = s.unpack(data[0:s.size])
     packet_size += 8
 
     if (len(data) < packet_size):
         # too small
         print "Storing " + str(len(data)) + " bytes in the pipeline"
-        INBOUND_PIPELINE += data
+        pipeline += data
         return None
     elif (len(data) > packet_size):
         print "Storing " + str(len(data) - packet_size) + " remaindered data bytes in the pipeline"
-        INBOUND_PIPELINE += data[packet_size:]
+        pipeline += data[packet_size:]
         return data[:packet_size]
     else:
         return data
 
 
 def parse_packet(data, key=None, logger=None):
+    #print "Parse packet key: ",hd(key)
     has_decrypted = False
     result = {'status': 'fail'}
 

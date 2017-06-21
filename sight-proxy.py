@@ -6,14 +6,18 @@ from bluetooth import *
 
 from lib.pump_emulator import *
 from lib.client_emulator import *
+from lib.keystore import *
 
 # pnp_sock = BluetoothSocket(RFCOMM)
 # pnp_sock.bind(("", 5))
 # pnp_sock.listen(1)
 
 EMULATE_PUMP = False
-PARSE_WHEN_PROXY = True
+PARSE_WHEN_PROXY = False
 CLIENT_CONNECT = False
+MITM_PROXY = False
+
+MAX_PACKET_COUNT = 1
 
 LOG_FILE = "logs/log-sight-proxy-" + str(int(time.time())) + ".log"
 if (not os.path.exists("logs")):
@@ -27,6 +31,8 @@ console.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s : %(message)s')
 console.setFormatter(formatter)
 logger.addHandler(console)
+
+key_erase_all()  # really needs some better state handling for key negotiation phase
 
 server_sock = BluetoothSocket(RFCOMM)
 server_sock.bind(("", PORT_ANY))
@@ -56,6 +62,9 @@ second_dongle_mac = None
 fast_connect = True
 SPACER = ' ' * 17
 
+CLIENT_SOCK_PIPELINE = ''
+RSOCK_PIPELINE = ''
+
 if (len(sys.argv) > 1):
 
     for a in range(1, len(sys.argv)):
@@ -67,6 +76,8 @@ if (len(sys.argv) > 1):
         if arg == "--mitm-proxy":
             print SPACER + "Running mitm proxy"
             MITM_PROXY = True
+            CLIENT_CONNECT = True
+            EMULATE_PUMP = True
             continue
         if arg == "--simple-proxy":
             print SPACER + "Running simple proxy"
@@ -108,7 +119,7 @@ while True:
     rsock = None
     client_sock = None
 
-    if not CLIENT_CONNECT:
+    if not CLIENT_CONNECT or MITM_PROXY:
         client_sock, client_info = server_sock.accept()
         logger.info("Accepted connection from " + str(client_info))
         input_list.append(client_sock)
@@ -118,7 +129,7 @@ while True:
         logger.info("Delaying client startup by " + str(delay) + " seconds to allow things to settle")
         time.sleep(delay)
 
-    if (not EMULATE_PUMP and real_pump_mac != None):
+    if ((not EMULATE_PUMP and real_pump_mac != None) or MITM_PROXY):
         logger.info("Searching real device: " + real_pump_mac)
 
         if (not fast_connect):
@@ -185,30 +196,53 @@ while True:
                     break
                 else:
 
+                    which_pipeline = CLIENT_SOCK_PIPELINE if active_socket is client_sock else RSOCK_PIPELINE
                     packet_pipeline = []
 
-                    pdata = getPipelinedPacket(data)
+                    pdata = getPipelinedPacket(data, pipeline=which_pipeline)
                     if (not pdata is None):
                         packet_pipeline += [pdata]
 
-                    pdata = getPipelinedPacket('')
+                    pdata = getPipelinedPacket('', pipeline=which_pipeline)
                     while not pdata is None:
                         packet_pipeline += [pdata]
-                        pdata = getPipelinedPacket('')
+                        pdata = getPipelinedPacket('', pipeline=which_pipeline)
 
                     for data in packet_pipeline:
                         client_reply = None
-                        if not EMULATE_PUMP:
+
+                        if MITM_PROXY:
+                            if (active_socket is client_sock):
+                                which_in_key = key_get('real_client_incoming')
+                                which_out_key = key_get('real_pump_outgoing')
+
+                            else:
+                                which_in_key = key_get('real_pump_incoming')
+                                which_out_key = key_get('real_client_outgoing')
+
+                            p = parse_packet(data, key=which_in_key, logger=logger)
+                            r = p['records']
+                            if p['command'] == 'Data' and 'Decrypted' in r and r['Decrypted'] and p['valid'] == True:
+                                print "Create packet again!!!!!"
+                                new_packet = reEncryptBlock(nonce=r['Nonce'], payload=r['Decrypted'], key=which_out_key,
+                                                            packet=data)
+                                hexdump.hexdump(new_packet)
+                                if (mapping.has_key(active_socket)):
+                                    mapping[active_socket].send(new_packet)  # !!
+
+                        if not EMULATE_PUMP or MITM_PROXY:
                             if not CLIENT_CONNECT:
                                 if (mapping.has_key(active_socket)):
                                     mapping[active_socket].send(data)
                                     if PARSE_WHEN_PROXY:
                                         if (active_socket is client_sock):
-                                            pretty_parsed(parse_packet(data, INCOMING_KEY, logger=logger))
+                                            pretty_parsed(
+                                                parse_packet(data, key_get('known_incoming_key'), logger=logger))
                                         else:
-                                            pretty_parsed(parse_packet(data, OUTGOING_KEY, logger=logger))
-                            else:
-                                client_reply = generate_client_response(data,logger=logger)
+                                            pretty_parsed(
+                                                parse_packet(data, key_get('known_outgoing_key'), logger=logger))
+                            elif (active_socket is rsock):
+                                client_reply = generate_client_response(data, logger=logger)
                                 if not client_reply is None:
                                     active_socket.send(client_reply)
                                 else:
@@ -226,8 +260,8 @@ while True:
                             hdr = hexdump.hexdump(client_reply, result="return")
                             if (hdr != None and hdr != "None"):
                                 logger.info("\n" + prefix + "\n" + hdr + "\n")
-                        if EMULATE_PUMP:
-                            pump_response = generate_pump_response(data,logger=logger)
+                        if EMULATE_PUMP and (active_socket is client_sock):
+                            pump_response = generate_pump_response(data, logger=logger)
                             if not pump_response == None:
                                 outputs = list(splitByMTU(pump_response, 110))
                                 for item in outputs:

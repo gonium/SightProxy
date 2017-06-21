@@ -1,22 +1,22 @@
+from keystore import *
 from packet_factory import *
 from cryptograph import *
-
 from test_packets import *
 
 # client device emulator
 
-PUMP_RANDOM_DATA = None
+REAL_PUMP_RANDOM_DATA = None
 OUR_RANDOM_DATA = None
 PEER_PUBLIC_KEY = None
 SECRET_KEY = None
-INCOMING_KEY = None
-OUTGOING_KEY = None
+CLIENT_EMU_INCOMING_KEY = None
+CLIENT_EMU_OUTGOING_KEY = None
 COMID = None
 
 
 def generate_client_response(data, logger=None):
     # TODO replace with better storage
-    global PUMP_RANDOM_DATA, OUR_RANDOM_DATA, PEER_RANDOM_DATA, SECRET_KEY, INCOMING_KEY, OUTGOING_KEY, COMID
+    global REAL_PUMP_RANDOM_DATA, OUR_RANDOM_DATA, PEER_RANDOM_DATA, RECEIVED_SECRET_KEY, CLIENT_EMU_INCOMING_KEY, CLIENT_EMU_OUTGOING_KEY, COMID
 
     if (COMID == None):
         # COMID = int(hd(getRandomBytes(2)[::-1]), 16) & 0xfff
@@ -37,7 +37,8 @@ def generate_client_response(data, logger=None):
         reply = build_ConnectionRequest()
 
     else:
-        r = parse_packet(data, key=INCOMING_KEY)
+        print "generate client response parse packet"
+        r = parse_packet(data, key=CLIENT_EMU_INCOMING_KEY)
 
         if (r['status'] == 'identified'):
             print "Client Emulator Processing: ", r['command']
@@ -60,20 +61,23 @@ def generate_client_response(data, logger=None):
 
             if (r['command'] == 'KeyResponse'):
                 # get keys
-                PUMP_RANDOM_DATA = r['records']['RandomData']
-                SECRET_KEY = decryptWithOurRSAkey(r['records']['PreMasterKey'])
-                (INCOMING_KEY, OUTGOING_KEY) = deriveKeys(SECRET_KEY, KEY_SEED, OUR_RANDOM_DATA + PUMP_RANDOM_DATA)
-                logger.info("CLIENT OUTGOING_KEY: " + hd(OUTGOING_KEY))
-                logger.info("CLIENT INCOMING_KEY: " + hd(INCOMING_KEY))
+                REAL_PUMP_RANDOM_DATA = r['records']['RandomData']
+                RECEIVED_SECRET_KEY = decryptWithOurRSAkey(r['records']['PreMasterKey'])
+                (CLIENT_EMU_INCOMING_KEY, CLIENT_EMU_OUTGOING_KEY) = deriveKeys(RECEIVED_SECRET_KEY, KEY_SEED, OUR_RANDOM_DATA + REAL_PUMP_RANDOM_DATA)
+                key_set('real_pump_incoming', CLIENT_EMU_INCOMING_KEY)
+                key_set('real_pump_outgoing', CLIENT_EMU_OUTGOING_KEY)
+
+                logger.info("CLIENT OUTGOING_KEY: " + hd(CLIENT_EMU_OUTGOING_KEY))
+                logger.info("CLIENT INCOMING_KEY: " + hd(CLIENT_EMU_INCOMING_KEY))
 
                 print "Replying with VerifyDisplayRequest"
                 reply = build_VerifyDisplayRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
-                                                   key=OUTGOING_KEY)
+                                                   key=CLIENT_EMU_OUTGOING_KEY)
 
             if (r['command'] == 'VerifyDisplayResponse'):
                 print "Replying with VerifyConfirmRequest"
                 reply = build_VerifyConfirmRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
-                                                   key=OUTGOING_KEY)
+                                                   key=CLIENT_EMU_OUTGOING_KEY)
 
 
 
@@ -82,7 +86,7 @@ def generate_client_response(data, logger=None):
 
     print
     print "CLIENT EMULATOR REPLY"
-    x = parse_packet(reply, key=OUTGOING_KEY)
+    x = parse_packet(reply, key=CLIENT_EMU_OUTGOING_KEY)
     print x['status']
     pretty_parsed(x)
     return reply
