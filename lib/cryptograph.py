@@ -116,6 +116,9 @@ def encryptWithPeerRSAkey(data, pubkey):
     cipher = PKCS1_OAEP.new(pubkey)
     return cipher.encrypt(data)
 
+def decryptWithOurRSAkey(data):
+    return PKCS1_OAEP.new(getRSAkey()).decrypt(data)
+
 
 def hd(s):
     return hexdump.dump(s).lower().replace(" ", "")
@@ -177,7 +180,7 @@ assert (hd(produceCCMtag(key="\x9e\x89\xef\x30\xb5\x6a\x5d\x6a\x99\x17\x2b\x31\x
                          payload='\x67\xef\x3a\xfc\x48\x4e\x69\x0a\x30\x3c\x45\xd1\xec\xe5\x49\x53' * 5,
                          header='\xbb\xe1\xe7\xf1\x40\x7e\x23\x5c\xe6\x8b\x9a\xd7\x4a\x14\x29\xfe' * 5)) == "8062ec3ab19db5cb")
 
-assert (PKCS1_OAEP.new(getRSAkey()).decrypt(
+assert (decryptWithOurRSAkey(
     encryptWithPeerRSAkey("hello world", publicKeyFromString(publicKeyToString(getRSAkey())))) == "hello world")
 
 if __name__ == "__main__":

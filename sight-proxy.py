@@ -5,6 +5,7 @@ import time
 from bluetooth import *
 
 from lib.pump_emulator import *
+from lib.client_emulator import *
 
 # pnp_sock = BluetoothSocket(RFCOMM)
 # pnp_sock.bind(("", 5))
@@ -12,6 +13,7 @@ from lib.pump_emulator import *
 
 EMULATE_PUMP = False
 PARSE_WHEN_PROXY = True
+CLIENT_CONNECT = False
 
 LOG_FILE = "logs/log-sight-proxy-" + str(int(time.time())) + ".log"
 if (not os.path.exists("logs")):
@@ -49,32 +51,54 @@ advertise_service(server_sock, serial_id_string,
                   )
 
 real_pump_mac = None
+second_dongle_mac = None
 
 fast_connect = True
+SPACER = ' ' * 17
 
 if (len(sys.argv) > 1):
-    real_pump_mac = sys.argv[1]
-    if (real_pump_mac == 'emulate'):
-        print "                 Using pump emulator!"
-        EMULATE_PUMP = True
-    else:
-        print "                 Real pump is at:", real_pump_mac
 
-if (len(sys.argv) > 2):
-    second_dongle_mac = sys.argv[2]
-    print "Outbound connections will go via:", second_dongle_mac
-else:
-    second_dongle_mac = None
+    for a in range(1, len(sys.argv)):
+        arg = sys.argv[a]
+        if arg == "--emulate-client":
+            print SPACER + "Emulating a client"
+            CLIENT_CONNECT = True
+            continue
+        if arg == "--mitm-proxy":
+            print SPACER + "Running mitm proxy"
+            MITM_PROXY = True
+            continue
+        if arg == "--simple-proxy":
+            print SPACER + "Running simple proxy"
+            continue
+        if arg == "--emulate-pump":
+            print SPACER + "Emulating pump"
+            EMULATE_PUMP = True
+            continue
+        if arg == "--fast-connect":
+            fast_connect = True
+            continue
+        if arg == "--slow-connect":
+            fast_connect = False
+            continue
 
-if (len(sys.argv) > 3):
-    if (sys.argv[3] == "fast"):
-        fast_connect = True
-    else:
-        fast_connect = False
+        if (real_pump_mac == None):
+            real_pump_mac = arg
+            if (real_pump_mac == 'emulate'):
+                print SPACER + "Using pump emulator!"
+                EMULATE_PUMP = True
+            else:
+                print SPACER + "Real pump is at:", real_pump_mac
+        else:
+            second_dongle_mac = arg
+            print "Outbound connections will go via:", second_dongle_mac
 
-print "          Fast connect is set to:", fast_connect
+print SPACER + "Fast connect is set to:", fast_connect
 
 print
+
+if (CLIENT_CONNECT and not real_pump_mac):
+    raise ValueError("Client connect set but no mac address specified")
 
 while True:
     print "Waiting on channel %d" % port
@@ -82,11 +106,17 @@ while True:
     mapping = {}
     input_list = []
     rsock = None
+    client_sock = None
 
-    client_sock, client_info = server_sock.accept()
-    logger.info("Accepted connection from " + str(client_info))
-    input_list.append(client_sock)
-    # client_sock.setblocking(0)
+    if not CLIENT_CONNECT:
+        client_sock, client_info = server_sock.accept()
+        logger.info("Accepted connection from " + str(client_info))
+        input_list.append(client_sock)
+        # client_sock.setblocking(0)
+    else:
+        delay = 8
+        logger.info("Delaying client startup by " + str(delay) + " seconds to allow things to settle")
+        time.sleep(delay)
 
     if (not EMULATE_PUMP and real_pump_mac != None):
         logger.info("Searching real device: " + real_pump_mac)
@@ -128,12 +158,17 @@ while True:
                 time.sleep(backoff)
                 backoff = backoff + 0.2
 
-        mapping[client_sock] = rsock
-        mapping[rsock] = client_sock
+        if not client_sock is None:
+            mapping[client_sock] = rsock
+            mapping[rsock] = client_sock
 
         input_list.append(rsock)
 
     buffer_size = 1024
+
+    if CLIENT_CONNECT:
+        print "Sending initial client data!"
+        rsock.send(generate_client_response("initial"))
 
     print "Waiting for incoming data"
 
@@ -162,15 +197,22 @@ while True:
                         pdata = getPipelinedPacket('')
 
                     for data in packet_pipeline:
+                        client_reply = None
                         if not EMULATE_PUMP:
-                            if (mapping.has_key(active_socket)):
-                                mapping[active_socket].send(data)
-                                if PARSE_WHEN_PROXY:
-                                    if (active_socket is client_sock):
-                                        pretty_parsed(parse_packet(data, INCOMING_KEY))
-                                    else:
-                                        pretty_parsed(parse_packet(data, OUTGOING_KEY))
-
+                            if not CLIENT_CONNECT:
+                                if (mapping.has_key(active_socket)):
+                                    mapping[active_socket].send(data)
+                                    if PARSE_WHEN_PROXY:
+                                        if (active_socket is client_sock):
+                                            pretty_parsed(parse_packet(data, INCOMING_KEY, logger=logger))
+                                        else:
+                                            pretty_parsed(parse_packet(data, OUTGOING_KEY, logger=logger))
+                            else:
+                                client_reply = generate_client_response(data,logger=logger)
+                                if not client_reply is None:
+                                    active_socket.send(client_reply)
+                                else:
+                                    logger.info("No client response generated for packet")
                         if (active_socket is client_sock):
                             prefix = "------>>> "
                         else:
@@ -179,9 +221,13 @@ while True:
                             hdr = hexdump.hexdump(data, result="return")
                             if (hdr != None and hdr != "None"):
                                 logger.info("\n" + prefix + "\n" + hdr + "\n")
-
+                        if not client_reply is None:
+                            prefix = "E----->>> "
+                            hdr = hexdump.hexdump(client_reply, result="return")
+                            if (hdr != None and hdr != "None"):
+                                logger.info("\n" + prefix + "\n" + hdr + "\n")
                         if EMULATE_PUMP:
-                            pump_response = generate_pump_response(data)
+                            pump_response = generate_pump_response(data,logger=logger)
                             if not pump_response == None:
                                 outputs = list(splitByMTU(pump_response, 110))
                                 for item in outputs:
@@ -198,7 +244,8 @@ while True:
     logger.info("socket disconnect")
     if (rsock != None):
         rsock.close()
-    client_sock.close()
+    if (client_sock != None):
+        client_sock.close()
 
 server_sock.close()
 logger.info("exit")

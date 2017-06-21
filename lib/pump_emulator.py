@@ -13,7 +13,7 @@ INCOMING_KEY = None
 OUTGOING_KEY = None
 
 
-def generate_pump_response(data):
+def generate_pump_response(data,logger=None):
     # TODO replace with better storage
     global PUMP_RANDOM_DATA, PEER_RANDOM_DATA, PEER_RANDOM_DATA, SECRET_KEY, INCOMING_KEY, OUTGOING_KEY
 
@@ -22,12 +22,16 @@ def generate_pump_response(data):
         return
 
     reply = None
-    r = parse_packet(data, key=INCOMING_KEY)
+    r = parse_packet(data, key=INCOMING_KEY, logger=logger)
 
     if (r['status'] == 'identified'):
         print "Pump Emulator Processing: ", r['command']
         pretty(r['records'])
         print
+
+        if ('valid' in r and r['valid'] == False):
+            logger.critical("Trailer CCM INVALID! - skipping")
+            return None
 
         if (r['command'] == 'ConnectionRequest'):
             print "Replying with ConnectionResponse"
@@ -48,6 +52,8 @@ def generate_pump_response(data):
                                       lazy_timestamp=r['records']['TimeStamp'],
                                       nonce=r['records']['Nonce'])
             (OUTGOING_KEY, INCOMING_KEY) = deriveKeys(SECRET_KEY, KEY_SEED, PEER_RANDOM_DATA + PUMP_RANDOM_DATA)
+            logger.info("PUMPEMU OUTGOING_KEY: " + hd(OUTGOING_KEY))
+            logger.info("PUMPEMU INCOMING_KEY: " + hd(INCOMING_KEY))
 
         if (r['command'] == 'VerifyDisplayRequest'):
             print "Replying with VerifyDisplayResponse"
