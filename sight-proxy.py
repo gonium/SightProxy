@@ -63,8 +63,8 @@ second_dongle_mac = None
 fast_connect = True
 SPACER = ' ' * 17
 
-CLIENT_SOCK_PIPELINE = ''
-RSOCK_PIPELINE = ''
+CLIENT_SOCK_PIPELINE = ['']
+RSOCK_PIPELINE = ['']
 
 
 def log_packet(packet, socket, direction, source):

@@ -278,24 +278,25 @@ def splitByMTU(data, mtu):
 
 def getPipelinedPacket(data, pipeline=None):
     assert (not pipeline is None)
-    data = pipeline + data
+    print "pipeline size: "+str(len(pipeline))
+    data = pipeline[0] + data
     s = getStructFromDefinition('TopHeader')
     if data == None or len(data) < s.size:
         # print "Not enough data for pipeline processing"
         return None
 
-    pipeline = ''
+    pipeline[0] = ''
     (magic, packet_size) = s.unpack(data[0:s.size])
     packet_size += 8
 
     if (len(data) < packet_size):
         # too small
         print "Storing " + str(len(data)) + " bytes in the pipeline"
-        pipeline += data
+        pipeline[0] += data
         return None
     elif (len(data) > packet_size):
         print "Storing " + str(len(data) - packet_size) + " remaindered data bytes in the pipeline"
-        pipeline += data[packet_size:]
+        pipeline[0] = data[packet_size:]
         return data[:packet_size]
     else:
         return data
@@ -575,5 +576,4 @@ def hdwrap(data):
 
 if __name__ == "__main__":
     print "Running packet factory test parameters"
-
     from test_packets import *
