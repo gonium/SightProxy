@@ -16,6 +16,7 @@ PUMP_EMU_OUTGOING_KEY = None
 
 def generate_pump_response(data, logger=None, VERBOSE_LOGS=True):
     # TODO replace with better storage
+    global HIGHEST_NONCE
     global PUMP_RANDOM_DATA, PEER_RANDOM_DATA, PEER_RANDOM_DATA, SECRET_KEY, PUMP_EMU_INCOMING_KEY, PUMP_EMU_OUTGOING_KEY
 
     if (data == None):
@@ -39,12 +40,13 @@ def generate_pump_response(data, logger=None, VERBOSE_LOGS=True):
             return None
 
         if (r['command'] == 'ConnectionRequest'):
+            HIGHEST_NONCE['in'] = 0
             print "Replying with ConnectionResponse"
             reply = build_ConnectionResponse(comid=r['records']['ComID'])
 
         if (r['command'] == 'SynRequest'):
             print "Replying with SynAckResponse"
-            reply = build_SynAckResponse(comid=r['records']['ComID'], nonce=r['records']['Nonce'])
+            reply = build_SynAckResponse(comid=r['records']['ComID'], nonce=r['records']['Nonce'], channel='in')
 
         if (r['command'] == 'KeyRequest'):
             print "Replying with KeyResponse"
@@ -55,7 +57,8 @@ def generate_pump_response(data, logger=None, VERBOSE_LOGS=True):
                                       random_data=PUMP_RANDOM_DATA, secret_key=SECRET_KEY,
                                       peer_public_key=PEER_PUBLIC_KEY,
                                       lazy_timestamp=r['records']['TimeStamp'],
-                                      nonce=r['records']['Nonce'])
+                                      nonce=r['records']['Nonce'],
+                                      channel='in')
             (PUMP_EMU_OUTGOING_KEY, PUMP_EMU_INCOMING_KEY) = deriveKeys(SECRET_KEY, KEY_SEED,
                                                                         PEER_RANDOM_DATA + PUMP_RANDOM_DATA)
             key_set('real_client_incoming', PUMP_EMU_INCOMING_KEY)
@@ -66,12 +69,14 @@ def generate_pump_response(data, logger=None, VERBOSE_LOGS=True):
         if (r['command'] == 'VerifyDisplayRequest'):
             print "Replying with VerifyDisplayResponse"
             reply = build_VerifyDisplayResponse(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
-                                                key=PUMP_EMU_OUTGOING_KEY)
+                                                key=PUMP_EMU_OUTGOING_KEY,
+                                                channel='in')
 
         if (r['command'] == 'VerifyConfirmRequest'):
             print "Replying with VerifyConfirmResponse"
             reply = build_VerifyConfirmResponse(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
-                                                key=PUMP_EMU_OUTGOING_KEY)
+                                                key=PUMP_EMU_OUTGOING_KEY,
+                                                channel='in')
     else:
         print r
 

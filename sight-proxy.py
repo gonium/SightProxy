@@ -206,7 +206,7 @@ while True:
 
     if CLIENT_CONNECT:
         print "Sending initial client data!"
-        rsock.send(generate_client_response("initial",logger=logger, VERBOSE_LOGS=VERBOSE_LOGS))
+        rsock.send(generate_client_response("initial", logger=logger, VERBOSE_LOGS=VERBOSE_LOGS))
 
     print "Waiting for incoming data"
 
@@ -223,7 +223,8 @@ while True:
                     break
                 else:
 
-                    log_packet(packet=data,socket="in" if active_socket == client_sock else "out",direction="in", source="real")
+                    log_packet(packet=data, socket="in" if active_socket == client_sock else "out", direction="in",
+                               source="real")
 
                     which_pipeline = CLIENT_SOCK_PIPELINE if active_socket is client_sock else RSOCK_PIPELINE
                     packet_pipeline = []
@@ -245,18 +246,20 @@ while True:
                             if (active_socket is client_sock):
                                 which_in_key = key_get('real_client_incoming')
                                 which_out_key = key_get('real_pump_outgoing')
-                                which_log_socket = "OUT" # opposite
+                                which_log_socket = "OUT"  # opposite
+                                channel = 'out'
                             else:
                                 which_in_key = key_get('real_pump_incoming')
                                 which_out_key = key_get('real_client_outgoing')
                                 which_log_socket = "IN"  # opposite
+                                channel = 'in'
 
                             p = parse_packet(data, key=which_in_key, logger=logger)
                             r = p['records']
                             if p['command'] == 'Data' and 'Decrypted' in r and r['Decrypted'] and p['valid'] == True:
                                 print "Create packet again!!!!!"
                                 new_packet = reEncryptBlock(nonce=r['Nonce'], payload=r['Decrypted'], key=which_out_key,
-                                                            packet=data)
+                                                            packet=data, channel=channel)
                                 if (new_packet != None):
                                     proxied_packet = True
                                     if (mapping.has_key(active_socket)):
@@ -310,10 +313,10 @@ while True:
                                 log_packet(packet=pump_response,
                                            socket="in" if active_socket == client_sock else "out",
                                            direction="out", source="emulated")
-                        #             prefix = "<<<-----E "
-                        #             hdr = hexdump.hexdump(item, result="return")
-                        #             if (hdr != None and hdr != "None"):
-                        #                 logger.info("\n" + prefix + "\n" + hdr + "\n")
+                                #             prefix = "<<<-----E "
+                                #             hdr = hexdump.hexdump(item, result="return")
+                                #             if (hdr != None and hdr != "None"):
+                                #                 logger.info("\n" + prefix + "\n" + hdr + "\n")
 
 
     except IOError:

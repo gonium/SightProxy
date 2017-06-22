@@ -17,9 +17,11 @@ COMID = None
 
 PAIRING_PENDING_RETRY = 0
 
+
 def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
     # TODO replace with better storage
     global PAIRING_PENDING_RETRY
+    global HIGHEST_NONCE
     global REAL_PUMP_RANDOM_DATA, OUR_RANDOM_DATA, PEER_RANDOM_DATA, RECEIVED_SECRET_KEY, CLIENT_EMU_INCOMING_KEY, CLIENT_EMU_OUTGOING_KEY, COMID
 
     if (COMID == None):
@@ -38,6 +40,7 @@ def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
 
     if (data == "initial"):
         print "Client emulator initial ConnectionRequest"
+        HIGHEST_NONCE['in'] = 0
         reply = build_ConnectionRequest()
 
     else:
@@ -80,12 +83,12 @@ def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
 
                 print "Replying with VerifyDisplayRequest"
                 reply = build_VerifyDisplayRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
-                                                   key=CLIENT_EMU_OUTGOING_KEY)
+                                                   key=CLIENT_EMU_OUTGOING_KEY, channel='out')
 
             if (r['command'] == 'VerifyDisplayResponse'):
                 print "Replying with VerifyConfirmRequest"
                 reply = build_VerifyConfirmRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
-                                                   key=CLIENT_EMU_OUTGOING_KEY)
+                                                   key=CLIENT_EMU_OUTGOING_KEY, channel='out')
 
             if (r['command'] == 'VerifyConfirmResponse'):
                 if (r['records']['Decrypted'] == '\x93\x06'):
@@ -94,7 +97,7 @@ def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
                         logger.info("Pairing pending - wait 2 seconds and retry")
                         time.sleep(2)
                         reply = build_VerifyConfirmRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
-                                                       key=CLIENT_EMU_OUTGOING_KEY)
+                                                           key=CLIENT_EMU_OUTGOING_KEY, channel='out')
                 elif (r['records']['Decrypted'] == '\x3b\x2e'):
                     logger.info("Pairing confirmed!")
                     PAIRING_PENDING_RETRY = 0

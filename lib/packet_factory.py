@@ -209,14 +209,15 @@ def checkTagForPacket(packet, key, payload='', tag=None):
         return False
 
 
-def reEncryptBlock(nonce=None, payload=None, key=None, packet=None):
+def reEncryptBlock(nonce=None, payload=None, key=None, packet=None, channel=None):
     if (packet == None):
         print "NO PACKET TO REENCRYPT"
         return None
     if (key == None):
         print "NO KEY TO REENCRYPT WITH"
         return None
-
+    nonce = incrementNonce(packet[16:29], channel=channel)
+    packet = packet[:16] + nonce + packet[29:]
     crypted_data = CTRmodeEncryptData(plain=payload, nonce=nonce, key=key)
     packet = packet[:-(8 + len(payload))] + crypted_data + '\x00' * 8
     packet = injectTagForPacket(packet, key=key, payload=payload)
@@ -439,11 +440,11 @@ def build_ConnectionResponse(comid=0):
     return packet
 
 
-def build_SynAckResponse(comid=0, nonce=None):
+def build_SynAckResponse(comid=0, nonce=None, channel=None):
     packet_type = 'SynAckResponse'
     s = getStructFromDefinition(packet_type)
     # TODO this results in error reply
-    nonce = incrementNonce(nonce)
+    nonce = incrementNonce(nonce, channel=channel)
     connection_response_length = 0
     (pla, plb) = calculatePacketLengths(s.size)
     packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
@@ -453,9 +454,9 @@ def build_SynAckResponse(comid=0, nonce=None):
     return packet
 
 
-def build_VerifyDisplayRequest(comid=0, nonce=None, key=None):
+def build_VerifyDisplayRequest(comid=0, nonce=None, key=None, channel=None):
     packet_type = 'VerifyDisplayRequest'
-    nonce = incrementNonce(nonce)
+    nonce = incrementNonce(nonce, channel=channel)
     s = getStructFromDefinition(packet_type)
 
     response_length = 0
@@ -468,10 +469,10 @@ def build_VerifyDisplayRequest(comid=0, nonce=None, key=None):
     return packet
 
 
-def build_VerifyDisplayResponse(comid=0, nonce=None, key=None):
+def build_VerifyDisplayResponse(comid=0, nonce=None, key=None, channel=None):
     packet_type = 'VerifyDisplayResponse'
     s = getStructFromDefinition(packet_type)
-    nonce = incrementNonce(nonce)
+    nonce = incrementNonce(nonce, channel=channel)
     response_length = 0
     (pla, plb) = calculatePacketLengths(s.size)
     packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
@@ -482,9 +483,9 @@ def build_VerifyDisplayResponse(comid=0, nonce=None, key=None):
     return packet
 
 
-def build_VerifyConfirmRequest(comid=0, nonce=None, key=None):
+def build_VerifyConfirmRequest(comid=0, nonce=None, key=None, channel=None):
     packet_type = 'VerifyConfirmRequest'
-    nonce = incrementNonce(nonce)
+    nonce = incrementNonce(nonce, channel=channel)
     pairing_confirmed = '\x3b\x2e'
     pairing_confirmed_crypted = CTRmodeEncryptData(plain=pairing_confirmed, nonce=nonce, key=key)
     s = getStructFromDefinition(packet_type)
@@ -499,9 +500,9 @@ def build_VerifyConfirmRequest(comid=0, nonce=None, key=None):
     return packet
 
 
-def build_VerifyConfirmResponse(comid=0, nonce=None, key=None):
+def build_VerifyConfirmResponse(comid=0, nonce=None, key=None, channel=None):
     packet_type = 'VerifyConfirmResponse'
-    nonce = incrementNonce(nonce)
+    nonce = incrementNonce(nonce, channel=channel)
     pairing_confirmed = '\x3b\x2e'
     pairing_confirmed_crypted = CTRmodeEncryptData(plain=pairing_confirmed, nonce=nonce, key=key)
     s = getStructFromDefinition(packet_type)
@@ -538,10 +539,10 @@ def build_KeyRequest(comid=1, random_data=None, our_public_key=None, lazy_timest
 
 
 def build_KeyResponse(comid=0, random_data=None, secret_key=None, peer_public_key=None, lazy_timestamp=None,
-                      nonce=None):
+                      nonce=None, channel=None):
     packet_type = 'KeyResponse'
     s = getStructFromDefinition(packet_type)
-    nonce = incrementNonce(nonce)
+    nonce = incrementNonce(nonce, channel=channel)
     connection_response_length = 290
     pub_key = publicKeyFromString(peer_public_key)
     # print pub_key
@@ -567,13 +568,12 @@ def build_KeyResponse(comid=0, random_data=None, secret_key=None, peer_public_ke
 
 ### self tests
 
+def hdwrap(data):
+    if (data != None):
+        hexdump.hexdump(data)
+
+
 if __name__ == "__main__":
     print "Running packet factory test parameters"
-
-
-    def hdwrap(data):
-        if (data != None):
-            hexdump.hexdump(data)
-
 
     from test_packets import *

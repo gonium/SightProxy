@@ -14,7 +14,11 @@ from twofish import Twofish
 KEY_STORE_PEM = "myRSAkey.pem"
 KEY_SEED = "\x6D\x61\x73\x74\x65\x72\x20\x73\x65\x63\x72\x65\x74"
 
-KEY_STORE = {} # not used
+KEY_STORE = {}  # not used
+
+HIGHEST_NONCE = {}
+HIGHEST_NONCE['in'] = 0
+HIGHEST_NONCE['out'] = 0
 
 
 ### random data
@@ -75,9 +79,13 @@ def multiHashXOR(secret, seed, bytes):
     return stringXOR(m1, s1)
 
 
-def incrementNonce(string):
+def incrementNonce(string, channel=None):
+    global HIGHEST_NONCE
     nonce = long(hd(string[::-1]), 16)
     nonce += 1
+    if (nonce <= HIGHEST_NONCE[channel]):
+        nonce = HIGHEST_NONCE[channel] + 1
+    HIGHEST_NONCE[channel] = nonce
     bstring = longToBytes(nonce, len(string))
     return bstring
 
@@ -115,6 +123,7 @@ def publicKeyToString(key):
 def encryptWithPeerRSAkey(data, pubkey):
     cipher = PKCS1_OAEP.new(pubkey)
     return cipher.encrypt(data)
+
 
 def decryptWithOurRSAkey(data):
     return PKCS1_OAEP.new(getRSAkey()).decrypt(data)
@@ -173,8 +182,6 @@ def produceCCMtag(nonce, payload, header, key=None):
     ctr = Twofish(key).encrypt(produceCTRblock(nonce, 0))
     final = stringXOR(result, ctr)
     return final
-
-
 
 
 ### self tests
