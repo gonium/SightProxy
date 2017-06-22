@@ -17,7 +17,6 @@ EMPTY_NONCE = '\x00' * 13
 EMPTY_CRC = 0
 EMPTY_LENGTH = 0
 
-
 PRIMITIVES = {
     'Magic': '4s',
     'PacketLength': 'L',
@@ -81,32 +80,75 @@ def getCommandValueFromName(name):
 
 
 def pretty_parsed(x):
+    print pretty_parsed_string(x)
+    # if x is None: return
+    # if (x['status'] == "identified"):
+    #     pretty(x['records'])
+    # else:
+    #     print x['reason']
+    # if ('valid' in x):
+    #     print "         valid:  " + str(x['valid'])
+    # print
+
+
+def pretty_parsed_string(x):
     if x is None: return
+    result = ''
     if (x['status'] == "identified"):
-        pretty(x['records'])
+        result += pretty_string(x['records'])
     else:
-        print x['reason']
+        result += x['reason'] + "\n"
     if ('valid' in x):
-        print "         valid:  " + str(x['valid'])
-    print
+        result += "         valid:  " + str(x['valid'])
+    return result
 
 
 def pretty(d, indent=0, ascii=False):
+    print pretty_string(d, indent=indent, ascii=ascii),
+    # for key, value in d.iteritems():
+    #     if (ascii):
+    #         key = key.capitalize()
+    #     print '  ' * indent + (" " * ((indent * 2) + 14 - len(key))) + str(key) + ":",
+    #     if isinstance(value, dict):
+    #         print
+    #         pretty(value, indent + 1)
+    #     else:
+    #         if isinstance(value, str):
+    #             if (ascii):
+    #                 print ' ' * (1) + value
+    #             else:
+    #                 print ' ' * (1) + hexdump.dump(value)
+    #         else:
+    #             print ' ' * (1) + str(value)
+
+
+def pretty_string(d, indent=0, ascii=False):
+    result = ''
     for key, value in d.iteritems():
         if (ascii):
             key = key.capitalize()
-        print '  ' * indent + (" " * ((indent * 2) + 14 - len(key))) + str(key) + ":",
+        result += '  ' * indent + (" " * ((indent * 2) + 14 - len(key))) + str(key) + ": "
         if isinstance(value, dict):
-            print
-            pretty(value, indent + 1)
+            result += '\n'
+            result += pretty_string(value, indent + 1) + '\n'
         else:
             if isinstance(value, str):
                 if (ascii):
-                    print ' ' * (1) + value
+                    result += ' ' * (1) + value + '\n'
                 else:
-                    print ' ' * (1) + hexdump.dump(value)
+                    result += ' ' * (1) + hexdump.dump(value) + '\n'
             else:
-                print ' ' * (1) + str(value)
+
+                if (key == 'Command'):
+                    result += ' ' * (1) + hex(value) + " "
+                    if (COMMAND_TYPE.has_key(value)):
+                        result += COMMAND_TYPE[value]
+                    else:
+                        result += "UNKNOWN!"
+                else:
+                    result += ' ' * (1) + str(value)
+                result += '\n'
+    return result
 
 
 def calculateCrc(packet):
@@ -168,6 +210,13 @@ def checkTagForPacket(packet, key, payload='', tag=None):
 
 
 def reEncryptBlock(nonce=None, payload=None, key=None, packet=None):
+    if (packet == None):
+        print "NO PACKET TO REENCRYPT"
+        return None
+    if (key == None):
+        print "NO KEY TO REENCRYPT WITH"
+        return None
+
     crypted_data = CTRmodeEncryptData(plain=payload, nonce=nonce, key=key)
     packet = packet[:-(8 + len(payload))] + crypted_data + '\x00' * 8
     packet = injectTagForPacket(packet, key=key, payload=payload)
@@ -227,7 +276,7 @@ def splitByMTU(data, mtu):
 
 
 def getPipelinedPacket(data, pipeline=None):
-    assert(not pipeline is None)
+    assert (not pipeline is None)
     data = pipeline + data
     s = getStructFromDefinition('TopHeader')
     if data == None or len(data) < s.size:
@@ -252,7 +301,7 @@ def getPipelinedPacket(data, pipeline=None):
 
 
 def parse_packet(data, key=None, logger=None):
-    #print "Parse packet key: ",hd(key)
+    # print "Parse packet key: ",hd(key)
     has_decrypted = False
     result = {'status': 'fail'}
 
@@ -343,8 +392,13 @@ def processAnyDecryptedData(logger=None, result=None):
         if 'records' in result:
             r = result['records']
             if 'Decrypted' in r:
+                if ('valid' in result and result['valid'] == False):
+                    insert = "CCM INVALID!! "
+                else:
+                    insert = ""
                 logger.info(
-                    "++++ " + result['command'] + " =\n" + hexdump.hexdump(r['Decrypted'], result="return") + "\n")
+                    insert + "++++ " + result['command'] + " =\n" + hexdump.hexdump(r['Decrypted'],
+                                                                                    result="return") + "\n")
 
 
 ### Packet builders

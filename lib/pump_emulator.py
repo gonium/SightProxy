@@ -14,7 +14,7 @@ PUMP_EMU_INCOMING_KEY = None
 PUMP_EMU_OUTGOING_KEY = None
 
 
-def generate_pump_response(data, logger=None):
+def generate_pump_response(data, logger=None, VERBOSE_LOGS=True):
     # TODO replace with better storage
     global PUMP_RANDOM_DATA, PEER_RANDOM_DATA, PEER_RANDOM_DATA, SECRET_KEY, PUMP_EMU_INCOMING_KEY, PUMP_EMU_OUTGOING_KEY
 
@@ -26,9 +26,13 @@ def generate_pump_response(data, logger=None):
     r = parse_packet(data, key=PUMP_EMU_INCOMING_KEY, logger=logger)
 
     if (r['status'] == 'identified'):
-        print "Pump Emulator Processing: ", r['command']
-        pretty(r['records'])
-        print
+        log_string = "Pump Emulator Processing: " + r['command'] + "\n"
+        log_string += pretty_parsed_string(r) + "\n"
+
+        if (VERBOSE_LOGS == True):
+            logger.info("\n" + log_string)
+        else:
+            print log_string
 
         if ('valid' in r and r['valid'] == False):
             logger.critical("Trailer CCM INVALID! - skipping")
@@ -71,13 +75,20 @@ def generate_pump_response(data, logger=None):
     else:
         print r
 
-    print
-    print "PUMP EMULATOR REPLY"
     x = parse_packet(reply, key=PUMP_EMU_OUTGOING_KEY)
-    print x['status']
-    if (x['status'] == "identified"):
-        pretty(x['records'])
-        print
+    log_string = "\nPUMP EMULATOR REPLY\n" + x['status'] + "\n" + pretty_parsed_string(x) + "\n"
+
+    # print x['status']
+    # pretty_parsed(x)
+    # if (x['status'] == "identified"):
+    #     pretty(x['records'])
+    # print
+
+    if (VERBOSE_LOGS == True):
+        logger.info("\n" + log_string)
+    else:
+        print log_string
+
     return reply
 
 

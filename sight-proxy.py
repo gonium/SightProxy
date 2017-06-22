@@ -16,6 +16,7 @@ EMULATE_PUMP = False
 PARSE_WHEN_PROXY = False
 CLIENT_CONNECT = False
 MITM_PROXY = False
+VERBOSE_LOGS = True
 
 MAX_PACKET_COUNT = 1
 
@@ -64,6 +65,32 @@ SPACER = ' ' * 17
 
 CLIENT_SOCK_PIPELINE = ''
 RSOCK_PIPELINE = ''
+
+
+def log_packet(packet, socket, direction, source):
+    if (socket == 'in'):
+        socket = " IN"
+    else:
+        socket = "OUT"
+
+    prefix = "????"
+
+    if (direction == 'in' and source == 'real'):
+        prefix = "<<<------ "
+    if (direction == 'in' and source == 'emulated'):
+        prefix = "<<<-----E "
+
+    if (direction == 'out' and source == 'real'):
+        prefix = "------>>> "
+    if (direction == 'out' and source == 'emulated'):
+        prefix = "E----->>> "
+    if (direction == 'out' and source == 'proxy'):
+        prefix = "P----->>> "
+
+    hdr = hexdump.hexdump(packet, result="return")
+    if (hdr != None and hdr != "None"):
+        logger.info("\n" + socket + " " + prefix + "\n" + hdr + "\n")
+
 
 if (len(sys.argv) > 1):
 
@@ -179,7 +206,7 @@ while True:
 
     if CLIENT_CONNECT:
         print "Sending initial client data!"
-        rsock.send(generate_client_response("initial"))
+        rsock.send(generate_client_response("initial",logger=logger, VERBOSE_LOGS=VERBOSE_LOGS))
 
     print "Waiting for incoming data"
 
@@ -196,6 +223,8 @@ while True:
                     break
                 else:
 
+                    log_packet(packet=data,socket="in" if active_socket == client_sock else "out",direction="in", source="real")
+
                     which_pipeline = CLIENT_SOCK_PIPELINE if active_socket is client_sock else RSOCK_PIPELINE
                     packet_pipeline = []
 
@@ -210,15 +239,17 @@ while True:
 
                     for data in packet_pipeline:
                         client_reply = None
+                        proxied_packet = False
 
                         if MITM_PROXY:
                             if (active_socket is client_sock):
                                 which_in_key = key_get('real_client_incoming')
                                 which_out_key = key_get('real_pump_outgoing')
-
+                                which_log_socket = "OUT" # opposite
                             else:
                                 which_in_key = key_get('real_pump_incoming')
                                 which_out_key = key_get('real_client_outgoing')
+                                which_log_socket = "IN"  # opposite
 
                             p = parse_packet(data, key=which_in_key, logger=logger)
                             r = p['records']
@@ -226,9 +257,14 @@ while True:
                                 print "Create packet again!!!!!"
                                 new_packet = reEncryptBlock(nonce=r['Nonce'], payload=r['Decrypted'], key=which_out_key,
                                                             packet=data)
-                                hexdump.hexdump(new_packet)
-                                if (mapping.has_key(active_socket)):
-                                    mapping[active_socket].send(new_packet)  # !!
+                                if (new_packet != None):
+                                    proxied_packet = True
+                                    if (mapping.has_key(active_socket)):
+                                        mapping[active_socket].send(new_packet)  # !!
+                                        log_packet(packet=new_packet, socket=which_log_socket, direction='out',
+                                                   source="proxy")
+                                else:
+                                    logger.critical("Cannot re-encrypt packet!")
 
                         if not EMULATE_PUMP or MITM_PROXY:
                             if not CLIENT_CONNECT:
@@ -241,35 +277,43 @@ while True:
                                         else:
                                             pretty_parsed(
                                                 parse_packet(data, key_get('known_outgoing_key'), logger=logger))
-                            elif (active_socket is rsock):
-                                client_reply = generate_client_response(data, logger=logger)
+                            elif (active_socket is rsock) and proxied_packet == False:
+                                client_reply = generate_client_response(data, logger=logger, VERBOSE_LOGS=VERBOSE_LOGS)
                                 if not client_reply is None:
                                     active_socket.send(client_reply)
+                                    log_packet(packet=client_reply,
+                                               socket="in" if active_socket == client_sock else "out",
+                                               direction="out", source="emulated")
+
                                 else:
                                     logger.info("No client response generated for packet")
-                        if (active_socket is client_sock):
-                            prefix = "------>>> "
-                        else:
-                            prefix = "<<<------ "
-                        if (data != None):
-                            hdr = hexdump.hexdump(data, result="return")
-                            if (hdr != None and hdr != "None"):
-                                logger.info("\n" + prefix + "\n" + hdr + "\n")
-                        if not client_reply is None:
-                            prefix = "E----->>> "
-                            hdr = hexdump.hexdump(client_reply, result="return")
-                            if (hdr != None and hdr != "None"):
-                                logger.info("\n" + prefix + "\n" + hdr + "\n")
-                        if EMULATE_PUMP and (active_socket is client_sock):
-                            pump_response = generate_pump_response(data, logger=logger)
+                        # if (active_socket is client_sock):
+                        #     prefix = "------>>> "
+                        # else:
+                        #     prefix = "<<<------ "
+                        # if (data != None):
+                        #     hdr = hexdump.hexdump(data, result="return")
+                        #     if (hdr != None and hdr != "None"):
+                        #         logger.info("\n" + prefix + "\n" + hdr + "\n")
+                        # if not client_reply is None:
+                        #     prefix = "E----->>> "
+                        #     hdr = hexdump.hexdump(client_reply, result="return")
+                        #     if (hdr != None and hdr != "None"):
+                        #         logger.info("\n" + prefix + "\n" + hdr + "\n")
+                        if EMULATE_PUMP and (active_socket is client_sock) and proxied_packet == False:
+                            pump_response = generate_pump_response(data, logger=logger, VERBOSE_LOGS=VERBOSE_LOGS)
                             if not pump_response == None:
+                                # do we actually need to split?
                                 outputs = list(splitByMTU(pump_response, 110))
                                 for item in outputs:
                                     active_socket.send(item)
-                                    prefix = "<<<-----E "
-                                    hdr = hexdump.hexdump(item, result="return")
-                                    if (hdr != None and hdr != "None"):
-                                        logger.info("\n" + prefix + "\n" + hdr + "\n")
+                                log_packet(packet=pump_response,
+                                           socket="in" if active_socket == client_sock else "out",
+                                           direction="out", source="emulated")
+                        #             prefix = "<<<-----E "
+                        #             hdr = hexdump.hexdump(item, result="return")
+                        #             if (hdr != None and hdr != "None"):
+                        #                 logger.info("\n" + prefix + "\n" + hdr + "\n")
 
 
     except IOError:

@@ -14,7 +14,7 @@ CLIENT_EMU_OUTGOING_KEY = None
 COMID = None
 
 
-def generate_client_response(data, logger=None):
+def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
     # TODO replace with better storage
     global REAL_PUMP_RANDOM_DATA, OUR_RANDOM_DATA, PEER_RANDOM_DATA, RECEIVED_SECRET_KEY, CLIENT_EMU_INCOMING_KEY, CLIENT_EMU_OUTGOING_KEY, COMID
 
@@ -41,11 +41,14 @@ def generate_client_response(data, logger=None):
         r = parse_packet(data, key=CLIENT_EMU_INCOMING_KEY)
 
         if (r['status'] == 'identified'):
-            print "Client Emulator Processing: ", r['command']
-            print
-            # pretty(r['records'])
-            pretty_parsed(r)
-            print
+
+            log_string = "Client Emulator Processing: " + r['command'] + "\n"
+            log_string += pretty_parsed_string(r) + "\n"
+
+            if (VERBOSE_LOGS == True):
+                logger.info("\n" + log_string)
+            else:
+                print log_string
 
             if ('valid' in r and r['valid'] == False):
                 logger.critical("Trailer CCM INVALID! - skipping")
@@ -63,7 +66,8 @@ def generate_client_response(data, logger=None):
                 # get keys
                 REAL_PUMP_RANDOM_DATA = r['records']['RandomData']
                 RECEIVED_SECRET_KEY = decryptWithOurRSAkey(r['records']['PreMasterKey'])
-                (CLIENT_EMU_INCOMING_KEY, CLIENT_EMU_OUTGOING_KEY) = deriveKeys(RECEIVED_SECRET_KEY, KEY_SEED, OUR_RANDOM_DATA + REAL_PUMP_RANDOM_DATA)
+                (CLIENT_EMU_INCOMING_KEY, CLIENT_EMU_OUTGOING_KEY) = deriveKeys(RECEIVED_SECRET_KEY, KEY_SEED,
+                                                                                OUR_RANDOM_DATA + REAL_PUMP_RANDOM_DATA)
                 key_set('real_pump_incoming', CLIENT_EMU_INCOMING_KEY)
                 key_set('real_pump_outgoing', CLIENT_EMU_OUTGOING_KEY)
 
@@ -84,11 +88,15 @@ def generate_client_response(data, logger=None):
         else:
             print r
 
-    print
-    print "CLIENT EMULATOR REPLY"
     x = parse_packet(reply, key=CLIENT_EMU_OUTGOING_KEY)
-    print x['status']
-    pretty_parsed(x)
+
+    log_string = "\nCLIENT EMULATOR REPLY\n" + x['status'] + "\n" + pretty_parsed_string(x) + "\n"
+
+    if (VERBOSE_LOGS == True):
+        logger.info("\n" + log_string)
+    else:
+        print log_string
+
     return reply
 
 
