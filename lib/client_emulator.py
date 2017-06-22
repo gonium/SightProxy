@@ -1,3 +1,5 @@
+import time
+
 from keystore import *
 from packet_factory import *
 from cryptograph import *
@@ -13,9 +15,11 @@ CLIENT_EMU_INCOMING_KEY = None
 CLIENT_EMU_OUTGOING_KEY = None
 COMID = None
 
+PAIRING_PENDING_RETRY = 0
 
 def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
     # TODO replace with better storage
+    global PAIRING_PENDING_RETRY
     global REAL_PUMP_RANDOM_DATA, OUR_RANDOM_DATA, PEER_RANDOM_DATA, RECEIVED_SECRET_KEY, CLIENT_EMU_INCOMING_KEY, CLIENT_EMU_OUTGOING_KEY, COMID
 
     if (COMID == None):
@@ -83,6 +87,21 @@ def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
                 reply = build_VerifyConfirmRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
                                                    key=CLIENT_EMU_OUTGOING_KEY)
 
+            if (r['command'] == 'VerifyConfirmResponse'):
+                if (r['records']['Decrypted'] == '\x93\x06'):
+                    PAIRING_PENDING_RETRY += 1
+                    if (PAIRING_PENDING_RETRY < 20):
+                        logger.info("Pairing pending - wait 2 seconds and retry")
+                        time.sleep(2)
+                        reply = build_VerifyConfirmRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
+                                                       key=CLIENT_EMU_OUTGOING_KEY)
+                elif (r['records']['Decrypted'] == '\x3b\x2e'):
+                    logger.info("Pairing confirmed!")
+                    PAIRING_PENDING_RETRY = 0
+
+                else:
+                    logger.critical("Pairing REJECTED!!!!!!!!")
+                    PAIRING_PENDING_RETRY = 0
 
 
         else:
