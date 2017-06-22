@@ -19,8 +19,9 @@ MITM_PROXY = False
 VERBOSE_LOGS = True
 
 MAX_PACKET_COUNT = 1
-
-LOG_FILE = "logs/log-sight-proxy-" + str(int(time.time())) + ".log"
+ts=str(int(time.time()))
+LOG_FILE = "logs/log-sight-proxy-" + ts + ".log"
+APP_LOG_FILE = "logs/app-log-sight-proxy-" + ts + ".log"
 if (not os.path.exists("logs")):
     os.mkdir("logs")
 
@@ -32,6 +33,13 @@ console.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s : %(message)s')
 console.setFormatter(formatter)
 logger.addHandler(console)
+
+handler = logging.FileHandler(APP_LOG_FILE)
+handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+app_logger = logging.getLogger('sight-app-proxy')
+app_logger.setLevel(logging.INFO)
+app_logger.addHandler(handler)
+app_logger.addHandler(console)
 
 key_erase_all()  # really needs some better state handling for key negotiation phase
 
@@ -248,13 +256,15 @@ while True:
                                 which_out_key = key_get('real_pump_outgoing')
                                 which_log_socket = "OUT"  # opposite
                                 channel = 'out'
+                                loghelper = 'FROM HAND '
                             else:
                                 which_in_key = key_get('real_pump_incoming')
                                 which_out_key = key_get('real_client_outgoing')
                                 which_log_socket = "IN"  # opposite
                                 channel = 'in'
+                                loghelper = 'FROM PUMP '
 
-                            p = parse_packet(data, key=which_in_key, logger=logger)
+                            p = parse_packet(data, key=which_in_key, logger=logger, loghelper=loghelper, app_logger=app_logger)
                             r = p['records']
                             if p['command'] == 'Data' and 'Decrypted' in r and r['Decrypted'] and p['valid'] == True:
                                 print "Create packet again!!!!!"

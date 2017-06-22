@@ -302,7 +302,7 @@ def getPipelinedPacket(data, pipeline=None):
         return data
 
 
-def parse_packet(data, key=None, logger=None):
+def parse_packet(data, key=None, logger=None, loghelper='', app_logger=None):
     # print "Parse packet key: ",hd(key)
     has_decrypted = False
     result = {'status': 'fail'}
@@ -385,22 +385,25 @@ def parse_packet(data, key=None, logger=None):
 
     result['records'] = command_data
     if (logger != None and has_decrypted):
-        processAnyDecryptedData(logger=logger, result=result)
+        processAnyDecryptedData(logger=logger, result=result, loghelper=loghelper, app_logger=app_logger)
     return result
 
 
-def processAnyDecryptedData(logger=None, result=None):
+def processAnyDecryptedData(logger=None, result=None, loghelper='', app_logger=None):
     if (result != None):
         if 'records' in result:
             r = result['records']
             if 'Decrypted' in r:
                 if ('valid' in result and result['valid'] == False):
-                    insert = "CCM INVALID!! "
+                    insert = loghelper + " CCM INVALID!! "
                 else:
-                    insert = ""
-                logger.info(
-                    insert + "++++ " + result['command'] + " =\n" + hexdump.hexdump(r['Decrypted'],
-                                                                                    result="return") + "\n")
+                    insert = loghelper
+                logstring=insert + "++++ " + result['command'] + " =\n" + hexdump.hexdump(r['Decrypted'],
+                                                                                    result="return") + "\n"
+                logstring = insert.join(logstring.splitlines(True))
+                #logger.info(logstring) # gets from app_logger
+                if not app_logger is None:
+                    app_logger.info(logstring)
 
 
 ### Packet builders
