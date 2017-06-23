@@ -74,7 +74,7 @@ Use pip to install: hexdump, logger, pybluez
 
 #### Starting it up as a mitm proxy:
 
-To start the script (replacing xx's with your actual mac address)
+To start the script (replacing xx's with your actual pump mac address) See the older proxy section below for details on obtaining the mac.
 
     sudo bash sight-proxy xx:xx:xx:xx:xx:xx --mitm-proxy
 
