@@ -2,93 +2,18 @@ import collections
 
 import datetime
 
+from packet_definitions import *
 from crc_algorithms import Crc
 from cryptograph import *
+from keystore import *
 
 crc = Crc(width=16, poly=0x1021,
           reflect_in=True, xor_in=0xffff,
           reflect_out=False, xor_out=0x0000)
 
-PROTOCOL_VERSION = 0x20  # 32
-
-MAGIC_NUMBER = '\x88\xCC\xEE\xFF'
-EMPTY_TRAILER = '\x00' * 8
-EMPTY_NONCE = '\x00' * 13
-EMPTY_CRC = 0
-EMPTY_LENGTH = 0
-
-PRIMITIVES = {
-    'Magic': '4s',
-    'PacketLength': 'L',
-    'PacketLengthA': 'H',
-    'PacketLengthB': 'h',
-    'Version': 'B',
-    'ErrorCode': 'B',
-    'Length': 'H',
-    'Command': 'B',
-    'ComID': 'L',
-    'Nonce': '13s',
-    'RandomData': '28s',
-    'PairingStatus': '2s',
-    'TimeStamp': 'L',
-    'TimeString': '4s',
-    'PreMasterKey': '256s',
-    'UnknownByte': 'B',
-    'CRC': 'H',
-    'Trailer': '8s',
-    'Data': '0s'
-}
-TOP_HEADER = ['Magic', 'PacketLengthA']
-HEADER = TOP_HEADER + ['PacketLengthB', 'Version', 'Command', 'Length', 'ComID', 'Nonce']
-FOOTER = ['Trailer']
-
-DEFINITION = {
-    'Header': HEADER,
-    'TopHeader': TOP_HEADER,
-    'Error': HEADER + ['ErrorCode'] + FOOTER,
-    'ConnectionRequest': HEADER + ['CRC', ] + FOOTER,
-    'ConnectionResponse': HEADER + ['UnknownByte', 'CRC', ] + FOOTER,
-    'KeyRequest': HEADER + ['RandomData', 'TimeStamp', 'PreMasterKey', 'CRC'] + FOOTER,
-    'KeyResponse': HEADER + ['RandomData', 'TimeStamp', 'PreMasterKey', 'CRC'] + FOOTER,
-    'SynRequest': HEADER + FOOTER,
-    'SynAckResponse': HEADER + FOOTER,
-    'VerifyDisplayRequest': HEADER + FOOTER,
-    'VerifyDisplayResponse': HEADER + FOOTER,
-    'VerifyConfirmRequest': HEADER + ['PairingStatus'] + FOOTER,
-    'VerifyConfirmResponse': HEADER + ['PairingStatus'] + FOOTER,
-    'Data': HEADER + ['Data'] + FOOTER
-}
-
-COMMAND_TYPE = {
-    0x06: 'Error',
-    0x09: 'ConnectionRequest',
-    0x0A: 'ConnectionResponse',
-    0x0C: 'KeyRequest',
-    0x11: 'KeyResponse',
-    0x12: 'VerifyDisplayRequest',
-    0x14: 'VerifyDisplayResponse',
-    0x0E: 'VerifyConfirmRequest',
-    0x1E: 'VerifyConfirmResponse',
-    0x17: 'SynRequest',
-    0x18: 'SynAckResponse',
-    0x03: 'Data',
-}
-
-
-def getCommandValueFromName(name):
-    return COMMAND_TYPE.keys()[COMMAND_TYPE.values().index(name)]
-
 
 def pretty_parsed(x):
     print pretty_parsed_string(x)
-    # if x is None: return
-    # if (x['status'] == "identified"):
-    #     pretty(x['records'])
-    # else:
-    #     print x['reason']
-    # if ('valid' in x):
-    #     print "         valid:  " + str(x['valid'])
-    # print
 
 
 def pretty_parsed_string(x):
@@ -103,51 +28,51 @@ def pretty_parsed_string(x):
     return result
 
 
-def pretty(d, indent=0, ascii=False):
-    print pretty_string(d, indent=indent, ascii=ascii),
-    # for key, value in d.iteritems():
-    #     if (ascii):
-    #         key = key.capitalize()
-    #     print '  ' * indent + (" " * ((indent * 2) + 14 - len(key))) + str(key) + ":",
-    #     if isinstance(value, dict):
-    #         print
-    #         pretty(value, indent + 1)
-    #     else:
-    #         if isinstance(value, str):
-    #             if (ascii):
-    #                 print ' ' * (1) + value
-    #             else:
-    #                 print ' ' * (1) + hexdump.dump(value)
-    #         else:
-    #             print ' ' * (1) + str(value)
+def pretty(d, indent=0, ascii=False, VERBOSE_PRETTY=False):
+    if (d == None):
+        print "None type passed to pretty print!"
+        return
+    print pretty_string(d, indent=indent, ascii=ascii, VERBOSE_PRETTY=VERBOSE_PRETTY),
 
 
-def pretty_string(d, indent=0, ascii=False):
+def pretty_string(d, indent=0, ascii=False, VERBOSE_PRETTY=False):
+    IMPORTANT_PRETTY_KEYS = ['Command', 'Length', 'Nonce', 'Decrypted', 'Service', 'AppOpCode', 'AppVersion',
+                             'Challenge']
     result = ''
     for key, value in d.iteritems():
         if (ascii):
             key = key.capitalize()
-        result += '  ' * indent + (" " * ((indent * 2) + 14 - len(key))) + str(key) + ": "
-        if isinstance(value, dict):
-            result += '\n'
-            result += pretty_string(value, indent + 1) + '\n'
-        else:
-            if isinstance(value, str):
-                if (ascii):
-                    result += ' ' * (1) + value + '\n'
-                else:
-                    result += ' ' * (1) + hexdump.dump(value) + '\n'
-            else:
-
-                if (key == 'Command'):
-                    result += ' ' * (1) + hex(value) + " "
-                    if (COMMAND_TYPE.has_key(value)):
-                        result += COMMAND_TYPE[value]
-                    else:
-                        result += "UNKNOWN!"
-                else:
-                    result += ' ' * (1) + str(value)
+        if (VERBOSE_PRETTY or key in IMPORTANT_PRETTY_KEYS):
+            result += '  ' * indent + (" " * ((indent * 2) + 14 - len(key))) + str(key) + ": "
+            if isinstance(value, dict):
                 result += '\n'
+                result += pretty_string(value, indent + 1) + '\n'
+            else:
+                if isinstance(value, str):
+                    if (ascii):
+                        result += ' ' * (1) + value + '\n'
+                    else:
+                        if (key == 'Decrypted'):
+                            app_classification = getAppLayerClassification(value)
+                            # stored here as the next packet is not identified
+                            if (app_classification == 'Request Challenge') and len(value) == 7:
+                                key_set("last-requested-challenge-service", ord(value[4]))
+                                key_set("last-requested-challenge-version", bytesToCommandNumber(value[5:7]))
+                            result += app_classification + "   "
+                        result += ' ' * (1) + hexdump.dump(value) + '\n'
+                else:
+                    if (key == 'Service'):
+                        result += ' ' * (1) + hex(value) + " "
+
+                    if (key == 'Command'):
+                        result += ' ' * (1) + hex(value) + " "
+                        if (COMMAND_TYPE.has_key(value)):
+                            result += COMMAND_TYPE[value]
+                        else:
+                            result += "UNKNOWN!"
+                    else:
+                        result += ' ' * (1) + str(value)
+                    result += '\n'
     return result
 
 
@@ -156,10 +81,21 @@ def calculateCrc(packet):
     return crc.table_driven(nupacket)
 
 
+def calculateCrcForSubFrame(packet):
+    nupacket = packet[4:len(packet) - 2]  # assume 4 byte header and 2 byte checksum
+    return crc.table_driven(nupacket)
+
+
 def calculateCrcBytes(packet):
     crc = calculateCrc(packet)
     s = struct.Struct("<" + PRIMITIVES['CRC'])
     return s.pack(crc)
+
+
+def calculateCrcForString(frame):
+    output = crc.table_driven(frame)
+    s = struct.Struct("<" + PRIMITIVES['CRC'])
+    return s.pack(output)
 
 
 def calculatePacketLengths(packet):
@@ -188,7 +124,7 @@ def produceTagForPacket(packet, key, payload=''):
         return None
 
     header = packet[8:29]
-    nonce = packet[16:19]
+    nonce = packet[16:29]
     tag = produceCCMtag(nonce=nonce, payload=payload, header=header, key=key)
     return tag
 
@@ -216,6 +152,15 @@ def reEncryptBlock(nonce=None, payload=None, key=None, packet=None, channel=None
     if (key == None):
         print "NO KEY TO REENCRYPT WITH"
         return None
+
+    comid = key_get(channel + '-comid')
+
+    if (comid == None):
+        print "NO COMID TO REENCRYPT WITH"
+
+    comid_bytes = getStructFromPrimitive('ComID').pack(comid)
+    packet = packet[:12] + comid_bytes + packet[16:]
+
     nonce = incrementNonce(packet[16:29], channel=channel)
     packet = packet[:16] + nonce + packet[29:]
     crypted_data = CTRmodeEncryptData(plain=payload, nonce=nonce, key=key)
@@ -258,6 +203,11 @@ def getStructFromDefinition(definition):
     return struct.Struct(result)
 
 
+def getStructFromPrimitive(primitive):
+    result = "<" + PRIMITIVES[primitive]
+    return struct.Struct(result)
+
+
 def unpackedToDictionary(unpacked_data, definition):
     result = collections.OrderedDict()
     for i, a in enumerate(unpacked_data):
@@ -278,7 +228,8 @@ def splitByMTU(data, mtu):
 
 def getPipelinedPacket(data, pipeline=None):
     assert (not pipeline is None)
-    print "pipeline size: "+str(len(pipeline))
+    if (len(pipeline[0]) > 0):
+        print "pipeline size: " + str(len(pipeline[0]))
     data = pipeline[0] + data
     s = getStructFromDefinition('TopHeader')
     if data == None or len(data) < s.size:
@@ -398,10 +349,10 @@ def processAnyDecryptedData(logger=None, result=None, loghelper='', app_logger=N
                     insert = loghelper + " CCM INVALID!! "
                 else:
                     insert = loghelper
-                logstring=insert + "++++ " + result['command'] + " =\n" + hexdump.hexdump(r['Decrypted'],
-                                                                                    result="return") + "\n"
+                logstring = insert + "++++ " + result['command'] + " =\n" + hexdump.hexdump(r['Decrypted'],
+                                                                                            result="return") + "\n"
                 logstring = insert.join(logstring.splitlines(True))
-                #logger.info(logstring) # gets from app_logger
+                # logger.info(logstring) # gets from app_logger
                 if not app_logger is None:
                     app_logger.info(logstring)
 
@@ -444,7 +395,21 @@ def build_ConnectionResponse(comid=0):
     return packet
 
 
-def build_SynAckResponse(comid=0, nonce=None, channel=None):
+def build_SynRequest(comid=0, nonce=None, channel=None, key=None):
+    packet_type = 'SynRequest'
+    s = getStructFromDefinition(packet_type)
+
+    nonce = incrementNonce(nonce, channel=channel)
+    connection_response_length = 0
+    (pla, plb) = calculatePacketLengths(s.size)
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
+                    connection_response_length,
+                    comid, nonce, EMPTY_TRAILER)
+    packet = injectTagForPacket(packet, key=key, payload='')
+    return packet
+
+
+def build_SynAckResponse(comid=0, nonce=None, channel=None, key=None):
     packet_type = 'SynAckResponse'
     s = getStructFromDefinition(packet_type)
     # TODO this results in error reply
@@ -454,7 +419,7 @@ def build_SynAckResponse(comid=0, nonce=None, channel=None):
     packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
                     connection_response_length,
                     comid, nonce, EMPTY_TRAILER)
-
+    packet = injectTagForPacket(packet, key=key, payload='')
     return packet
 
 
@@ -501,6 +466,23 @@ def build_VerifyConfirmRequest(comid=0, nonce=None, key=None, channel=None):
                     pairing_confirmed_crypted, EMPTY_TRAILER)
 
     packet = injectTagForPacket(packet, key=key, payload=pairing_confirmed)
+    return packet
+
+
+def build_DataPacket(comid=0, nonce=None, key=None, channel=None, data=None):
+    packet_type = 'Data'
+    nonce = incrementNonce(nonce, channel=channel)
+    data_crypted = CTRmodeEncryptData(plain=data, nonce=nonce, key=key)
+    PRIMITIVES['Data'] = str(len(data)) + "s"  # dynamic size
+    s = getStructFromDefinition(packet_type)
+
+    response_length = len(data)
+    (pla, plb) = calculatePacketLengths(s.size)
+    packet = s.pack(MAGIC_NUMBER, pla, plb, PROTOCOL_VERSION, getCommandValueFromName(packet_type),
+                    response_length, comid, nonce,
+                    data_crypted, EMPTY_TRAILER)
+
+    packet = injectTagForPacket(packet, key=key, payload=data)
     return packet
 
 
