@@ -46,8 +46,16 @@ except ImportError:
 block_size = 16
 key_size = 32
 
+try:
+    from twofish import Twofish
+    HAS_NATIVE_TWOFISH = True
+except ImportError:
+    HAS_NATIVE_TWOFISH = False
+    pass
 
 ### Cipher block chaining
+
+twofish_cache = {}
 
 class CBCMode(object):
     """
@@ -116,7 +124,28 @@ class CBCMode(object):
         return data.tostring()
 
 
-class Twofish:
+class Twofish_wrapper:
+    def __init__(self, key=None):
+        global twofish_cache
+        self.key = key
+
+        self.block_size = block_size
+
+        if (twofish_cache.has_key(key)):
+            self.instance = twofish_cache[key]
+        else:
+            if (HAS_NATIVE_TWOFISH == True):
+                self.instance = Twofish(key=key)
+                twofish_cache[key]=self.instance
+            else:
+                self.instance = pure_Twofish(key=key)
+                twofish_cache[key] = self.instance
+
+    def encrypt(self, block):
+        return self.instance.encrypt(block)
+
+
+class pure_Twofish:
     def __init__(self, key=None):
         """Twofish."""
         self.block_size = block_size
@@ -494,5 +523,5 @@ def decrypt(pkey, in_blk):
 
 __testkey = '\xD4\x3B\xB7\x55\x6E\xA3\x2E\x46\xF2\xA2\x82\xB7\xD4\x5B\x4E\x0D\x57\xFF\x73\x9D\x4D\xC9\x2C\x1B\xD7\xFC\x01\x70\x0C\xC8\x21\x6F'
 __testdat = '\x90\xAF\xE9\x1B\xB2\x88\x54\x4F\x2C\x32\xDC\x23\x9B\x26\x35\xE6'
-assert 'l\xb4V\x1c@\xbf\n\x97\x05\x93\x1c\xb6\xd4\x08\xe7\xfa' == Twofish(__testkey).encrypt(__testdat)
-assert __testdat == Twofish(__testkey).decrypt('l\xb4V\x1c@\xbf\n\x97\x05\x93\x1c\xb6\xd4\x08\xe7\xfa')
+assert 'l\xb4V\x1c@\xbf\n\x97\x05\x93\x1c\xb6\xd4\x08\xe7\xfa' == pure_Twofish(__testkey).encrypt(__testdat)
+assert __testdat == pure_Twofish(__testkey).decrypt('l\xb4V\x1c@\xbf\n\x97\x05\x93\x1c\xb6\xd4\x08\xe7\xfa')
