@@ -2,7 +2,9 @@
 
 This is highly experimental and should only be used by researchers who know exactly what they are doing. By using any of this information or source code you accept all associated risks. If you are unsure then please do not continue.
 
-If everything works then will be able to connect the handset and the data it sends over the rfcomm socket will be outputted as a hexdump
+If everything works then will be able to connect the handset and the data it sends over the rfcomm socket will be outputted as a hex dump
+
+There are various other features which can emulate one or both sides of the connection.
 
 ### Linux:
 
@@ -38,6 +40,7 @@ You need a patched version of sdptool to set uint16 attributes. I call this `joh
 
 Copy the `sdptool.patch` file in to the `bluez-5.45/tools` folder
 
+    cp ../../sdptool.patch tools
     cd tools
     patch <sdptool.patch
     cd ..
@@ -55,6 +58,12 @@ Check it works and your bluetooth is up and running
 
     joh-sdptool browse local
 
+If you get an error like:
+
+    Failed to connect to SDP server on FF:FF:FF:00:00:00: No such file or directory
+
+Did you reboot after adjusting your bluetooth configuration? Try a reboot
+
 If you are using two bluetooth dongles and you somehow manage to get sold two with the same mac address (which happened to me) then you can change the mac address of one of them using eg:
 
     tools/bdaddr -i hciX 00:11:22:33:44:55
@@ -65,12 +74,13 @@ Now make sure you have python 2.x installed
 
     sudo apt-get install -y python python-pip
 
-Use pip to install: hexdump, logger, pybluez
+Use pip to install: hexdump, logger, pybluez, pycrypto, requests
 
     sudo pip install hexdump
     sudo pip install logger
     sudo pip install pybluez
     sudo pip install pycrypto
+    sudo pip install requests
 
 #### Starting it up as a mitm proxy:
 
@@ -179,6 +189,18 @@ Now you can take your handset, remove the current pairing and add a new device a
 
 Logs will be stored in a created folder `logs` in the current directory.
 
+
+### General Analysis
+
+The equipment manufacturer should be congratulated on an effective and elegant design with a well engineered execution.
+
+The security model is good. Data is very well protected against eavesdropping, errors or other random glitches.
+
+There is no way using any of the tools contained here to perform any unauthorized operation.
+
+Only devices which have been intentionally paired by the user have the ability to make a connection.
+
+
 ### Limitations:
 
 The scripts are very simple prototypes without any error checking, it either works straight off or some missing component will completely prevent it from working.
@@ -187,12 +209,11 @@ Its possible my patches to sdptool are too simplistic and only work on little en
 
 I have only tested this in a multi-dongle configuration, it may work with just a single dongle but I thought two was more likely to succeed.
 
+Running this inside a virtual machine you may find that your host machine messes with the bluetooth adapater making it non-discoverable etc.
 
 ### To do:
 
 Currently this is a proof of concept only.
-
-
 
 
 

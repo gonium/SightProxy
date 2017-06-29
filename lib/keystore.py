@@ -25,6 +25,11 @@ def key_get(ref):
         return None
     return keystore[ref]
 
+def boolean_get(ref):
+    if not keystore.has_key(ref):
+        return False
+    return keystore[ref]
+
 
 def key_set(ref, val):
     keystore[ref] = val

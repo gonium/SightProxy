@@ -127,6 +127,9 @@ echo
 echo "Keypress to terminate"
 read x
 echo
+echo "Shutting down any previous running"
+pkill -f "sight-proxy.py"
+pkill -f "sight-pairing-agent.py"
 # actually we dont really shut anything down yet
 echo "SHUTDOWN"
 echo

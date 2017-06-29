@@ -8,8 +8,8 @@ from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from Crypto.Util.number import getRandomRange, bytes_to_long, long_to_bytes
 
-from twofish import CBCMode
-from twofish import Twofish
+from pure_twofish import CBCMode
+from pure_twofish import Twofish_wrapper
 
 KEY_STORE_PEM = "myRSAkey.pem"
 KEY_SEED = "\x6D\x61\x73\x74\x65\x72\x20\x73\x65\x63\x72\x65\x74"
@@ -163,7 +163,7 @@ def CTRmodeEncryptData(plain, nonce, key):
     padded = blockCipherZeroPad(plain)
     stream = ''
     for i in range(len(padded) >> 4):
-        stream += Twofish(key).encrypt(produceCTRblock(nonce, i + 1))
+        stream += Twofish_wrapper(key).encrypt(produceCTRblock(nonce, i + 1))
     return stringXOR(padded, stream)[:len(plain)]
 
 
@@ -175,11 +175,12 @@ def produceHeaderHeader(header):
 def produceCCMtag(nonce, payload, header, key=None):
     if (key == None):
         raise AttributeError("CCMtag key undefined")
-    iv = Twofish(key).encrypt(produceIV(nonce, len(payload)))
+    cipher = Twofish_wrapper(key)
+    iv = cipher.encrypt(produceIV(nonce, len(payload)))
     processed_header = blockCipherZeroPad(produceHeaderHeader(header))
-    result = (CBCMode(Twofish(key), iv).encrypt(processed_header + blockCipherZeroPad(payload)))
+    result = (CBCMode(cipher, iv).encrypt(processed_header + blockCipherZeroPad(payload)))
     result = result[len(result) - 16:len(result) - 8]  # mac
-    ctr = Twofish(key).encrypt(produceCTRblock(nonce, 0))
+    ctr = cipher.encrypt(produceCTRblock(nonce, 0))
     final = stringXOR(result, ctr)
     return final
 
