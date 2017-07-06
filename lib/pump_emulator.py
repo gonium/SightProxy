@@ -91,6 +91,7 @@ def generate_pump_response(data, logger=None, VERBOSE_LOGS=True):
             reply = build_VerifyDisplayResponse(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
                                                 key=PUMP_EMU_OUTGOING_KEY,
                                                 channel='in')
+            key_set("in-comid", r['records']['ComID'])
 
         if (r['command'] == 'VerifyConfirmRequest'):
             print "Replying with VerifyConfirmResponse"

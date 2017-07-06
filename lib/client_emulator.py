@@ -131,6 +131,7 @@ def generate_client_response(data, logger=None, VERBOSE_LOGS=True):
                 print "Replying with VerifyConfirmRequest"
                 reply = build_VerifyConfirmRequest(comid=r['records']['ComID'], nonce=r['records']['Nonce'],
                                                    key=CLIENT_EMU_OUTGOING_KEY, channel='out')
+                key_set("out-comid", r['records']['ComID'])
 
             if (r['command'] == 'VerifyConfirmResponse'):
                 if (r['records']['Decrypted'] == '\x93\x06'):

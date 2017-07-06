@@ -156,7 +156,7 @@ def reEncryptBlock(nonce=None, payload=None, key=None, packet=None, channel=None
     comid = key_get(channel + '-comid')
 
     if (comid == None):
-        print "NO COMID TO REENCRYPT WITH"
+        print "NO COMID TO REENCRYPT WITH ON CHANNEL " + str(channel)
 
     comid_bytes = getStructFromPrimitive('ComID').pack(comid)
     packet = packet[:12] + comid_bytes + packet[16:]
