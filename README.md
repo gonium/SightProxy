@@ -86,7 +86,7 @@ Use pip to install: hexdump, logger, pybluez, pycrypto, requests
 
 To start the script (replacing xx's with your actual pump mac address) See the older proxy section below for details on obtaining the mac.
 
-    sudo bash sight-proxy xx:xx:xx:xx:xx:xx --mitm-proxy
+    sudo bash sight-proxy.sh xx:xx:xx:xx:xx:xx --mitm-proxy
 
 Go through the pairing process on both of your devices at the same time but connect them to the proxy bluetooth names instead of each other so that the proxy sits between them. Press the confirm button on the pump device a few seconds before on the client. You should see data start appearing in the terminal and the decoded data will appear in the logs/app*.log file. Remember to un-pair and re-pair them directly with each other when you are finished.
 
